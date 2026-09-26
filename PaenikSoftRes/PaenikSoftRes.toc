@@ -8,6 +8,7 @@
 
 Libs\LibStub\LibStub.lua
 Libs\LibDeflate\LibDeflate.lua
+Libs\LibSerialize\LibSerialize.lua
 
 Debug.lua
 Core.lua
@@ -19,6 +20,7 @@ Data\Instances\MoltenCore.lua
 Data\Instances\ForeverDungeons.lua
 Comm.lua
 Rolls.lua
+GargulCompat.lua
 Import.lua
 GuildSync.lua
 UI\MainFrame.lua

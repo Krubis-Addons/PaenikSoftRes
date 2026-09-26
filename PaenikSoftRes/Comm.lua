@@ -49,7 +49,8 @@ local function processQueue()
         sending = false
         return
     end
-    local ok, result = pcall(C_ChatInfo.SendAddonMessage, PREFIX, entry.text, entry.chatType, entry.target)
+    local ok, result = pcall(C_ChatInfo.SendAddonMessage, entry.prefix or PREFIX, entry.text, entry.chatType,
+        entry.target)
     local R = Enum.SendAddonMessageResult or {}
     local retry = ok and (result == R.AddonMessageThrottle or result == R.ChannelThrottle
         or result == R.AddOnMessageLockdown)
@@ -73,10 +74,9 @@ local function processQueue()
     C_Timer.After(SEND_INTERVAL, processQueue)
 end
 
-local function queueMessage(chatType, target, onSent, ...)
-    if not chatType then return end
-    local text = table.concat({ VERSION, ... }, SEP)
-    local entry = { text = text, chatType = chatType, target = target, onSent = onSent, retries = 0 }
+-- prefix nil = eigenes Präfix; text ist dann bereits fertig (fremdes Protokoll, z. B. Gargul)
+local function enqueue(prefix, chatType, target, onSent, text)
+    local entry = { prefix = prefix, text = text, chatType = chatType, target = target, onSent = onSent, retries = 0 }
     -- Gilden-Nachrichten haben die niedrigste Priorität: Gruppe und Whisper (z. B. Würfelrunden)
     -- werden vor wartende Gilden-Nachrichten gestellt. queue[1] wird gerade gesendet und bleibt vorn.
     local position = #queue + 1
@@ -89,11 +89,20 @@ local function queueMessage(chatType, target, onSent, ...)
         end
     end
     table.insert(queue, position, entry)
-    ns.Debug("Comm", "->", chatType, target or "", text)
+    if prefix then
+        ns.Debug("Comm", "->", prefix, chatType, target or "", #text, "Byte")
+    else
+        ns.Debug("Comm", "->", chatType, target or "", text)
+    end
     if not sending then
         sending = true
         processQueue()
     end
+end
+
+local function queueMessage(chatType, target, onSent, ...)
+    if not chatType then return end
+    enqueue(nil, chatType, target, onSent, table.concat({ VERSION, ... }, SEP))
 end
 
 local function send(chatType, target, ...)
@@ -519,6 +528,12 @@ Comm.SEP = SEP
 Comm.MAX_LEN = MAX_LEN
 
 -- Wie SendWhisper, ruft onSent auf, sobald die Nachricht tatsächlich gesendet wurde
+-- Fertige Nachricht mit fremdem Präfix über dieselbe Queue (Reihenfolge und Throttle bleiben erhalten)
+function Comm:SendRaw(prefix, chatType, text)
+    if not chatType then return end
+    enqueue(prefix, chatType, nil, nil, text)
+end
+
 function Comm:SendWhisperThen(target, onSent, ...)
     queueMessage("WHISPER", target, onSent, ...)
 end

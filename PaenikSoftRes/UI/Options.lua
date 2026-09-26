@@ -77,13 +77,13 @@ table.insert(refreshers, function() durationDropdown:SignalUpdate() end)
 
 local debugCheck = createCheckbox(durationLabel, -18, "Debug-Log und Testbefehle",
     "Schreibt ein Protokoll in die SavedVariables (für die Fehlersuche) und schaltet die Testbefehle "
-        .. "probe, fake, loottest, lead, raider und auto frei.",
+        .. "probe, fake, loottest, gargultest, lead, raider und auto frei.",
     function() return ns.db.debug end,
     function(value) ns.SetDebug(value) end)
 debugCheck:ClearAllPoints()
 debugCheck:SetPoint("TOPLEFT", durationLabel, "BOTTOMLEFT", -4, -18)
 
-createCheckbox(debugCheck, -4, "Gilden-Synchronisation",
+local guildCheck = createCheckbox(debugCheck, -4, "Gilden-Synchronisation",
     "Veröffentlichte Sitzungen über die Gilde empfangen und weitergeben, ohne Gruppe reservieren. "
         .. "Unsichtbare Addon-Nachrichten, kein Chat.",
     function() return ns.db.guildSync ~= false end,
@@ -91,6 +91,12 @@ createCheckbox(debugCheck, -4, "Gilden-Synchronisation",
         ns.db.guildSync = value
         ns:Fire("SESSION_CHANGED")
     end)
+
+createCheckbox(guildCheck, -4, "Gargul-Würfelfenster öffnen (als Raidlead)",
+    "Startet bei jeder Würfelrunde auch das Würfelfenster von Gargul – für Raider ohne dieses Addon. "
+        .. "Wird nicht gesendet, wenn Gargul bei dir selbst geladen ist.",
+    function() return ns.db.gargulCompat ~= false end,
+    function(value) ns.db.gargulCompat = value end)
 
 -- Blizzard ruft OnRefresh beim Anzeigen der Seite auf
 function panel:OnRefresh()

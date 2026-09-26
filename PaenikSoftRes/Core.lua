@@ -10,6 +10,7 @@ local defaults = {
     showOnLogin = true,
     debug = false, -- Debug-Log und Testbefehle (Optionen oder /paeniksoftres debug)
     guildSync = true, -- Gilden-Synchronisation (GuildSync.lua)
+    gargulCompat = true, -- Würfelrunden auch an Gargul senden (GargulCompat.lua)
     -- forceRole: nil = automatisch, "lead" oder "raider" (zum Testen)
     -- sessions, activeSessionId, remoteSession: Soft-Reserve-Sitzungen, siehe Session.lua
 }
@@ -260,6 +261,7 @@ local TEST_COMMANDS = {
     loottest = function() ns.ShowLootTest() end,
     fake = function() ns.AddFakeReserves() end,
     probe = function() ns.RunProbe() end,
+    gargultest = function() ns.GargulCompat:SelfTest() end,
 }
 
 SLASH_PAENIKSOFTRES1 = "/paeniksoftres"
@@ -299,7 +301,7 @@ SlashCmdList.PAENIKSOFTRES = function(msg)
     else
         ns.Print("Befehle: show, hide, toggle, options, minimap, roll <Item>, lootpanel [reset], debug")
         if ns.db.debug then
-            ns.Print("Testbefehle: probe, fake, loottest, lead, raider, auto")
+            ns.Print("Testbefehle: probe, fake, loottest, gargultest, lead, raider, auto")
         end
     end
 end

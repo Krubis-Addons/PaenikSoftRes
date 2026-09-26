@@ -264,6 +264,8 @@ function Rolls:Start(itemID, link, restrictTo, category, freeReason, lootKey)
     end
     ns.Comm:SendGroup("RS", leadRound.id, itemID, restricted and 1 or 0, table.concat(sendNames, ";"),
         category or "", duration, ns.Comm.Sanitize(freeReason or ""))
+    -- Raider ohne dieses Addon, aber mit Gargul: Gargul-Würfelfenster öffnen
+    ns.GargulCompat:SendStart(leadRound, duration)
 
     -- Ansage: wer darf würfeln, wie lange
     local players = {}
@@ -342,6 +344,7 @@ function Rolls:End(byTimer)
         return
     end
     stopTimer()
+    ns.GargulCompat:SendStop()
     local link = leadRound.link
     if winner then
         ns.SendGroupChat(string.format("Gewinner %s: %s (%s, %d)", link, ns.UI.ShortName(winner.player),
@@ -386,6 +389,7 @@ function Rolls:Cancel()
     if not leadRound then return end
     stopTimer()
     if not leadRound.ended then
+        ns.GargulCompat:SendStop()
         ns.Comm:SendGroup("RC", leadRound.id)
         ns.SendGroupChat("Würfelrunde für " .. leadRound.link .. " abgebrochen.")
         ns.Debug("Rolls", "Runde abgebrochen", leadRound.id)
@@ -413,6 +417,7 @@ ns:On("ROLE_CHANGED", function()
     if leadRound and not ns.Roles:IsLead() then
         ns.Print("Du bist nicht mehr Raidlead – die Würfelrunde wurde verworfen.")
         stopTimer()
+        ns.GargulCompat:SendStop()
         if activeRound and activeRound.id == leadRound.id then
             activeRound = nil
         end
