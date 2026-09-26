@@ -67,8 +67,23 @@ function ns.RunProbe()
     end
     ns.Debug("Probe", "C_EncounterJournal:", type(C_EncounterJournal), "C_ChatInfo.SendAddonMessage:",
         type(C_ChatInfo and C_ChatInfo.SendAddonMessage))
-    ns.Debug("Probe", "Namen: UnitName", UnitName("player"), "| UnitFullName", UnitFullName("player"),
-        "| Realm", GetRealmName(), "| normalisiert", GetNormalizedRealmName(), "| FullName", ns.FullName("player"))
+    ns.Debug("Probe", "Realm", GetRealmName(), "| normalisiert", GetNormalizedRealmName(),
+        "| Nachnamen anzeigen", C_PlayerInfo.ShouldDisplaySurname and C_PlayerInfo.ShouldDisplaySurname())
+    local units = { "player" }
+    local prefix = IsInRaid() and "raid" or "party"
+    for i = 1, IsInRaid() and 40 or 4 do
+        if UnitExists(prefix .. i) then
+            table.insert(units, prefix .. i)
+        end
+    end
+    for _, unit in ipairs(units) do
+        local n1, n2 = UnitName(unit)
+        local f1, f2 = UnitFullName(unit)
+        local guid = UnitGUID(unit)
+        local _, _, _, _, _, gName, gRealm = GetPlayerInfoByGUID(guid)
+        ns.Debug("Probe", "Name", unit, "UnitName:", n1, "/", n2, "| UnitFullName:", f1, "/", f2,
+            "| GUID-Info:", gName, "/", gRealm, "| FullName:", ns.FullName(unit))
+    end
     probeEJ()
     local ejCount = 0
     for _, instance in ipairs(ns.LootData:GetInstances()) do

@@ -8,6 +8,8 @@
     "PanelTemplates_SetTab",
     "PanelTemplates_SetTabEnabled",
     "SOUNDKIT",
+    "LootFrame",
+    "TooltipDataProcessor",
     "ScrollUtil",
     "CreateScrollBoxListLinearView",
     "Item",

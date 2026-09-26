@@ -19,4 +19,6 @@ UI\MinimapButton.lua
 UI\RaiderPanel.lua
 UI\LeadPanel.lua
 UI\OverviewPanel.lua
+UI\LootPanel.lua
+UI\Tooltip.lua
 Probe.lua

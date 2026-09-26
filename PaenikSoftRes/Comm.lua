@@ -28,32 +28,8 @@ local function sanitize(text)
     return (tostring(text or ""):gsub("[%^;=,]", " "))
 end
 
-local function groupChannel()
-    if IsInRaid and IsInRaid() then
-        return "RAID"
-    elseif IsInGroup and IsInGroup() then
-        return "PARTY"
-    end
-end
-
--- Gruppen-Unit zu einem "Name-Realm" suchen (nil, wenn nicht in der Gruppe).
-local function unitForName(fullName)
-    if fullName == ns.FullName("player") then
-        return "player"
-    end
-    local prefix, count
-    if IsInRaid and IsInRaid() then
-        prefix, count = "raid", 40
-    else
-        prefix, count = "party", 4
-    end
-    for i = 1, count do
-        local unit = prefix .. i
-        if UnitExists(unit) and ns.FullName(unit) == fullName then
-            return unit
-        end
-    end
-end
+local groupChannel = ns.GroupChannel
+local unitForName = ns.UnitForName
 
 local function isGroupLeader(fullName)
     local unit = unitForName(fullName)

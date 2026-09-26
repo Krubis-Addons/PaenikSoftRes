@@ -128,6 +128,33 @@ function UI.ShortName(fullName)
     return fullName
 end
 
+-- SR-Inhaber eines Items als farbiger Text; nil, wenn niemand reserviert hat.
+-- Grün = ich, weiß = in der Gruppe, grau = nicht in der Gruppe (nur ohne Gruppe egal).
+function UI.FormatHolders(itemID)
+    local holders = ns.Session:GetReservesForItem(itemID)
+    if not next(holders) then return nil, 0 end
+    local me = ns.FullName("player")
+    local inGroup = IsInGroup and IsInGroup()
+    local names, total = {}, 0
+    for player, count in pairs(holders) do
+        total = total + count
+        local text = UI.ShortName(player) .. (count > 1 and (" x" .. count) or "")
+        local color = "ffffffff"
+        if player == me then
+            color = "ff40ff40"
+        elseif inGroup and not ns.UnitForName(player) then
+            color = "ff808080"
+        end
+        table.insert(names, { sort = player, text = "|c" .. color .. text .. "|r" })
+    end
+    table.sort(names, function(a, b) return a.sort < b.sort end)
+    local parts = {}
+    for i, entry in ipairs(names) do
+        parts[i] = entry.text
+    end
+    return table.concat(parts, ", "), total
+end
+
 -- Tabs
 local function selectTab(id)
     PanelTemplates_SetTab(mainFrame, id)
