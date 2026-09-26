@@ -3,7 +3,7 @@
 -- Raider spiegeln sie und schicken Wünsche per Whisper an ihn.
 --
 -- Nachrichten (Felder getrennt durch "^", Version zuerst):
---   1^R^sid^leader^instKey^instName^max^dup^locked^deadline   Lead → Gruppe: Regeln (deadline 0 = keiner)
+--   1^R^sid^leader^instKey^instName^max^dup^locked^deadline^name   Lead → Gruppe: Regeln (deadline 0 = keiner)
 --   1^F^sid                                           Lead → Gruppe: voller Stand folgt (Reserves leeren)
 --   1^P^sid^Name-Realm=id,id;Name-Realm=...           Lead → Gruppe: Reserves (mehrere Spieler)
 --   1^E^sid                                           Lead → Gruppe: Sitzung beendet
@@ -74,7 +74,19 @@ end
 local function queueMessage(chatType, target, onSent, ...)
     if not chatType then return end
     local text = table.concat({ VERSION, ... }, SEP)
-    table.insert(queue, { text = text, chatType = chatType, target = target, onSent = onSent, retries = 0 })
+    local entry = { text = text, chatType = chatType, target = target, onSent = onSent, retries = 0 }
+    -- Gilden-Nachrichten haben die niedrigste Priorität: Gruppe und Whisper (z. B. Würfelrunden)
+    -- werden vor wartende Gilden-Nachrichten gestellt. queue[1] wird gerade gesendet und bleibt vorn.
+    local position = #queue + 1
+    if chatType ~= "GUILD" then
+        for i = 2, #queue do
+            if queue[i].chatType == "GUILD" then
+                position = i
+                break
+            end
+        end
+    end
+    table.insert(queue, position, entry)
     ns.Debug("Comm", "->", chatType, target or "", text)
     if not sending then
         sending = true
@@ -93,7 +105,7 @@ local function sendRules()
     local channel = groupChannel()
     if not s or not channel then return end
     send(channel, nil, "R", s.id, s.leader, s.instanceKey or "", sanitize(s.instanceName),
-        s.maxReserves, s.allowDuplicates and 1 or 0, s.locked and 1 or 0, s.deadline or 0)
+        s.maxReserves, s.allowDuplicates and 1 or 0, s.locked and 1 or 0, s.deadline or 0, sanitize(s.name))
 end
 
 local function isFakePlayer(s, player)
@@ -241,6 +253,10 @@ function Comm:SubmitOwnReserves(itemIDs)
     -- Vorab lokal prüfen, damit der Raider sofort eine Rückmeldung bekommt.
     local ok, err = ns.Session:ValidateReserves(itemIDs, me)
     if not ok then return false, err end
+    -- Eine ältere Gilden-Anmeldung für diese Sitzung ist damit überholt
+    if ns.db.signups then
+        ns.db.signups[s.id] = nil
+    end
 
     pendingOwn = CopyTable(itemIDs)
     if requestTimer then
@@ -322,6 +338,7 @@ function handlers.R(sender, f)
         allowDuplicates = f[8] == "1",
         locked = f[9] == "1",
         deadline = tonumber(f[10]) ~= 0 and tonumber(f[10]) or nil,
+        name = f[11] ~= "" and f[11] or nil,
     })
 end
 
@@ -446,6 +463,17 @@ end
 function Comm:SendWhisper(target, ...)
     send("WHISPER", target, ...)
 end
+
+-- Nachricht an alle Online-Gildenmitglieder mit Addon (unsichtbar, kein Chat)
+function Comm:SendGuild(...)
+    if IsInGuild and IsInGuild() then
+        send("GUILD", nil, ...)
+    end
+end
+
+Comm.VERSION = VERSION
+Comm.SEP = SEP
+Comm.MAX_LEN = MAX_LEN
 
 -- Wie SendWhisper, ruft onSent auf, sobald die Nachricht tatsächlich gesendet wurde
 function Comm:SendWhisperThen(target, onSent, ...)

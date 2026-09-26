@@ -1,0 +1,579 @@
+-- Gilden-Synchronisation: Raider können ohne Gruppe bis zum Anmeldeschluss reservieren.
+-- Alles über unsichtbare Addon-Nachrichten im Kanal GUILD bzw. per Whisper (kein Chat-Spam).
+--
+-- Der Raidlead veröffentlicht einzelne Sitzungen (session.published). Jedes Addon in der Gilde speichert
+-- eine Kopie (db.guildSessions) und gibt sie an später eingeloggte Mitglieder weiter. Anmeldungen der
+-- Raider liegen lokal (db.signups) und gehen per Whisper an den Raidlead, sobald er online ist.
+--
+-- Nachrichten (Präfix PSR, Felder mit "^"):
+--   GR^sid^ver^leader^instKey^instName^max^dup^locked^deadline^name^updatedAt   Regeln (Gilde)
+--   GF^sid^ver^n                  voller Stand der Reserves folgt, in n GP-Stücken
+--   GP^sid^ver^Name-Realm=id,id;...   bestätigte Reserves (Stück)
+--   GD^sid^ver^leader             Sitzung gelöscht/zurückgezogen (Löschmarke, wird weitergegeben)
+--   GQ                            Login-Abfrage: wer hat Sitzungen?
+--   GS^sid^signedAt^id,id         (Whisper an den Raidlead) Anmeldung eines Raiders
+--   GA^sid^signedAt^outdated      (Whisper an den Raider) Anmeldung verarbeitet (outdated=1: neuere Auswahl vorhanden)
+--   GX^sid^signedAt^Text          (Whisper an den Raider) Anmeldung abgelehnt
+local _, ns = ...
+
+local GuildSync = {}
+ns.GuildSync = GuildSync
+
+local Signup = {}
+ns.Signup = Signup
+
+local Comm = ns.Comm
+
+local PUBLISH_DELAY = 5            -- Sekunden: Änderungen sammeln, dann einmal verteilen
+local REPUBLISH_MIN = 30           -- Raidlead: dieselbe Sitzung höchstens alle 30 s auf Nachfrage verteilen
+local REPLY_DELAY_MIN, REPLY_DELAY_MAX = 1, 4
+local SUPPRESS_WINDOW = 10         -- Sekunden: gleiche Version schon gehört → nicht erneut senden
+local RESEND_AFTER = 20            -- Sekunden bis eine Anmeldung erneut gesendet wird
+local SEEN_ONLINE_WINDOW = 300     -- Nachricht in den letzten 5 Min. → gilt als online (nur ohne Roster-Info)
+local LATE_WINDOW = 24 * 3600      -- rechtzeitig abgegebene Anmeldungen bis 24 h nach Schluss annehmen
+local KEEP_AFTER_DEADLINE = 3 * 24 * 3600
+local KEEP_WITHOUT_DEADLINE = 14 * 24 * 3600
+local KEEP_TOMBSTONE = 14 * 24 * 3600
+
+local function enabled()
+    return ns.db ~= nil and ns.db.guildSync ~= false and IsInGuild ~= nil and IsInGuild()
+end
+
+local function copies()
+    ns.db.guildSessions = ns.db.guildSessions or {}
+    return ns.db.guildSessions
+end
+
+local function signups()
+    ns.db.signups = ns.db.signups or {}
+    return ns.db.signups
+end
+
+local function me()
+    return ns.FullName("player")
+end
+
+local function ownSession(sid)
+    return ns.db.sessions and ns.db.sessions[sid or ""]
+end
+
+local function sameItems(a, b)
+    if #a ~= #b then return false end
+    local x, y = CopyTable(a), CopyTable(b)
+    table.sort(x)
+    table.sort(y)
+    for i = 1, #x do
+        if x[i] ~= y[i] then return false end
+    end
+    return true
+end
+
+local function parseItemIDs(text)
+    local ids = {}
+    for id in (text or ""):gmatch("%d+") do
+        table.insert(ids, tonumber(id))
+    end
+    return ids
+end
+
+-- Online-Status über den Gildenroster ----------------------------------------------------
+-- Vor jedem Whisper prüfen: an Offline-Spieler erzeugt WoW eine sichtbare Fehlermeldung.
+local rosterStatus = {} -- [Name-Realm] = true (online) / false (offline oder nur mobil)
+local lastSeen = {}     -- [Name-Realm] = GetTime() der letzten Addon-Nachricht (Fallback ohne Roster)
+
+local function keyFromGUID(guid)
+    if ns.IsSecret(guid) or not guid then return nil end
+    local _, _, _, _, _, name, realm = GetPlayerInfoByGUID(guid)
+    if ns.IsSecret(name) or ns.IsSecret(realm) or not name or name == "" then return nil end
+    realm = (realm and realm ~= "") and ns.NormalizeRealm(realm) or GetNormalizedRealmName()
+    return realm and (name .. "-" .. realm) or name
+end
+
+local function refreshRoster()
+    if not (GetNumGuildMembers and GetGuildRosterInfo) then return end
+    wipe(rosterStatus)
+    for i = 1, GetNumGuildMembers() do
+        local name, _, _, _, _, _, _, _, isOnline, _, _, _, _, isMobile, _, _, guid = GetGuildRosterInfo(i)
+        if not ns.IsSecret(isOnline) and not ns.IsSecret(isMobile) then
+            local key = keyFromGUID(guid)
+            if not key and not ns.IsSecret(name) and name then
+                key = name:find("-", 1, true) and name or (name .. "-" .. (GetNormalizedRealmName() or ""))
+            end
+            if key then
+                rosterStatus[key] = (isOnline and not isMobile) and true or false
+            end
+        end
+    end
+end
+
+function GuildSync:IsOnline(player)
+    local status = rosterStatus[player]
+    if status ~= nil then
+        return status -- der Roster weiß es: auch „offline“ gilt, egal wann zuletzt eine Nachricht kam
+    end
+    return lastSeen[player] ~= nil and GetTime() - lastSeen[player] < SEEN_ONLINE_WINDOW
+end
+
+-- Verteilen einer Sitzung (eigene oder vollständige Kopie) --------------------------------
+
+local function buildChunks(s)
+    local head = table.concat({ Comm.VERSION, "GP", s.id, s.version or 0 }, Comm.SEP) .. Comm.SEP
+    local chunks, chunk, length = {}, {}, #head
+    local players = {}
+    for player, list in pairs(s.reserves) do
+        if not (list[1] and list[1].source == "fake") then
+            table.insert(players, player)
+        end
+    end
+    table.sort(players)
+    for _, player in ipairs(players) do
+        local entry = player .. "=" .. table.concat(ns.Session:GetReservedItemIDs(player, s), ",")
+        if #head + #entry <= Comm.MAX_LEN then
+            if length + #entry + 1 > Comm.MAX_LEN then
+                table.insert(chunks, table.concat(chunk, ";"))
+                chunk, length = {}, #head
+            end
+            table.insert(chunk, entry)
+            length = length + #entry + 1
+        end
+    end
+    if #chunk > 0 then
+        table.insert(chunks, table.concat(chunk, ";"))
+    end
+    return chunks
+end
+
+local heard = {} -- [sid] = { version, time }: zuletzt im Kanal gehörte Version (Unterdrückung)
+
+local function recentlyHeard(sid, version)
+    local entry = heard[sid]
+    return entry ~= nil and entry.version >= version and GetTime() - entry.time < SUPPRESS_WINDOW
+end
+
+local function sendSessionFull(s)
+    local chunks = buildChunks(s)
+    local version = s.version or 0
+    Comm:SendGuild("GR", s.id, version, s.leader, s.instanceKey or "", Comm.Sanitize(s.instanceName),
+        s.maxReserves or 1, s.allowDuplicates and 1 or 0, s.locked and 1 or 0, s.deadline or 0,
+        Comm.Sanitize(s.name), s.updatedAt or 0)
+    Comm:SendGuild("GF", s.id, version, #chunks)
+    for _, chunk in ipairs(chunks) do
+        Comm:SendGuild("GP", s.id, version, chunk)
+    end
+    heard[s.id] = { version = version, time = GetTime() }
+    ns.Debug("Guild", "Sitzung verteilt", s.id, "Version", version, #chunks, "Stücke")
+end
+
+local function sendTombstone(sid, tombstone)
+    Comm:SendGuild("GD", sid, tombstone.version or 0, tombstone.leader or "")
+end
+
+-- Raidlead: veröffentlichte Sitzungen verteilen -----------------------------------------------
+local publishScheduled = {}
+local lastPublished = {} -- [sid] = GetTime()
+
+local function schedulePublish(s, delay)
+    if publishScheduled[s.id] then return end
+    publishScheduled[s.id] = true
+    C_Timer.After(delay or PUBLISH_DELAY, function()
+        publishScheduled[s.id] = nil
+        local current = ownSession(s.id)
+        if current and current.published and enabled() then
+            sendSessionFull(current)
+            lastPublished[s.id] = GetTime()
+        end
+    end)
+end
+
+function GuildSync:SetPublished(s, published)
+    if not s or s.leader ~= me() then return end
+    s.published = published and true or false
+    ns.Session:Touch(s) -- neue Version: wird verteilt bzw. dient als Version der Löschmarke
+    if not s.published and enabled() then
+        sendTombstone(s.id, { version = s.version, leader = s.leader })
+    end
+    ns.Debug("Guild", "Veröffentlicht", s.id, s.published)
+    ns:Fire("SESSION_CHANGED")
+end
+
+ns:On("OWN_SESSION_CHANGED", function(s)
+    if s.published then
+        schedulePublish(s)
+    end
+end)
+
+ns:On("OWN_SESSION_DELETED", function(s)
+    if s.published and enabled() then
+        sendTombstone(s.id, { version = (s.version or 0) + 1, leader = s.leader })
+    end
+end)
+
+-- Anzahl der über die Gilde eingegangenen Anmeldungen einer eigenen Sitzung
+function GuildSync:CountGuildSignups(s)
+    local count = 0
+    for _, list in pairs(s.reserves) do
+        if list[1] and list[1].source == "guild" then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+-- Raider: Anmeldungen ------------------------------------------------------------------------
+local lastSent = {} -- [sid] = GetTime() (bewusst nicht gespeichert: GetTime beginnt nach Neustart bei 0)
+
+local function trySend(sid)
+    local signup = signups()[sid]
+    local copy = copies()[sid]
+    if not signup or signup.status ~= "pending" or not copy or copy.deleted or not enabled() then return end
+    if not GuildSync:IsOnline(copy.leader) then return end
+    if lastSent[sid] and GetTime() - lastSent[sid] < RESEND_AFTER then return end
+    lastSent[sid] = GetTime()
+    Comm:SendWhisper(copy.leader, "GS", sid, signup.signedAt, table.concat(signup.items, ","))
+    ns.Debug("Guild", "Anmeldung gesendet", sid, copy.leader)
+end
+
+-- Ausstehende Anmeldungen nachreichen (optional nur für einen Raidlead), leicht verzögert
+local function sendPending(leader)
+    for sid, signup in pairs(signups()) do
+        local copy = copies()[sid]
+        if signup.status == "pending" and copy and (not leader or copy.leader == leader) then
+            C_Timer.After(1 + math.random() * 2, function() trySend(sid) end)
+        end
+    end
+end
+
+-- Art der Sitzung aus Sicht des Spielers: "own", "group" oder "guild"
+function Signup:Kind(s)
+    if not s then return nil end
+    if s.leader == me() then return "own" end
+    if s == ns.Session:GetRemote() and s == ns.Session:Get() then return "group" end
+    return "guild"
+end
+
+-- Eigene gewünschte Items in der Sitzung s (eigene Anmeldung oder bestätigter Stand)
+function Signup:GetOwn(s)
+    local kind = self:Kind(s)
+    if kind == "group" then
+        return ns.Comm:GetOwnReserves()
+    elseif kind == "guild" then
+        local signup = signups()[s.id]
+        if signup and signup.status ~= "rejected" then
+            return CopyTable(signup.items)
+        end
+    end
+    return ns.Session:GetReservedItemIDs(me(), s)
+end
+
+-- Status der eigenen Anmeldung: "confirmed", "pending" oder "rejected" (+ Grund)
+function Signup:GetStatus(s)
+    local kind = self:Kind(s)
+    if kind == "group" then
+        return ns.Comm:IsRequestPending() and "pending" or "confirmed"
+    elseif kind == "guild" then
+        local signup = signups()[s.id]
+        if signup then
+            return signup.status, signup.reason
+        end
+    end
+    return "confirmed"
+end
+
+function Signup:Submit(s, itemIDs)
+    local kind = self:Kind(s)
+    if kind == "own" then
+        return ns.Session:SetPlayerReserves(me(), itemIDs, "ingame", s)
+    elseif kind == "group" then
+        return ns.Comm:SubmitOwnReserves(itemIDs)
+    end
+    if not enabled() then
+        return false, "Gilden-Synchronisation ist aus"
+    end
+    local ok, err = ns.Session:ValidateReserves(itemIDs, me(), s)
+    if not ok then return false, err end
+    signups()[s.id] = { items = CopyTable(itemIDs), signedAt = GetServerTime(), status = "pending" }
+    lastSent[s.id] = nil
+    trySend(s.id)
+    ns:Fire("SESSION_CHANGED")
+    return true
+end
+
+-- Empfang ----------------------------------------------------------------------------------------
+
+local function markSeen(sender)
+    lastSeen[sender] = GetTime()
+end
+
+-- Regeln einer veröffentlichten Sitzung
+Comm:RegisterHandler("GR", function(sender, f)
+    if not enabled() then return end
+    markSeen(sender)
+    local sid, version, leader = f[3], tonumber(f[4]) or 0, f[5]
+    if not sid or not leader or leader == "" then return end
+    heard[sid] = { version = version, time = GetTime() }
+
+    if leader == me() then
+        -- Eine Kopie meiner eigenen Sitzung kommt zurück
+        local own = ownSession(sid)
+        if not own or not own.published then
+            -- gelöscht oder zurückgezogen: Löschmarke mit höherer Version verteilen
+            sendTombstone(sid, { version = version + 1, leader = leader })
+        elseif version > (own.version or 0) then
+            -- meine Version ist zurückgefallen (z. B. Absturz ohne Speichern): überholen und neu verteilen.
+            -- Nur bei echt neuerer Version – eine Weitergabe meines aktuellen Stands ist normal.
+            own.version = version
+            ns.Session:Touch(own)
+        end
+        return
+    end
+
+    local copy = copies()[sid]
+    if copy and (copy.version or 0) >= version then return end -- gleich alt oder älter (auch Löschmarken)
+    copy = { id = sid, reserves = {}, guildCopy = true }
+    copy.version = version
+    copy.leader = leader
+    copy.instanceKey = f[6] ~= "" and f[6] or nil
+    copy.instanceName = f[7] ~= "" and f[7] or nil
+    copy.maxReserves = tonumber(f[8]) or 1
+    copy.allowDuplicates = f[9] == "1"
+    copy.locked = f[10] == "1"
+    copy.deadline = tonumber(f[11]) ~= 0 and tonumber(f[11]) or nil
+    copy.name = f[12] ~= "" and f[12] or nil
+    copy.updatedAt = tonumber(f[13]) or GetServerTime()
+    copy.receivedAt = GetServerTime()
+    copy.complete = false -- erst mit allen GP-Stücken vollständig
+    copies()[sid] = copy
+    ns.Debug("Guild", "Sitzung empfangen", sid, "Version", version, "von", sender)
+    if sender == leader then
+        sendPending(leader) -- der Raidlead ist online
+    end
+    ns:Fire("SESSION_CHANGED")
+end)
+
+-- Voller Stand folgt: nur annehmen, wenn die eigene Kopie dieser Version noch unvollständig ist
+-- (sonst könnte ein Mitglied mit lückenhaftem Stand eine vollständige Kopie leeren)
+Comm:RegisterHandler("GF", function(sender, f)
+    if not enabled() then return end
+    markSeen(sender)
+    local copy = copies()[f[3] or ""]
+    if not copy or copy.deleted or copy.version ~= tonumber(f[4]) then return end
+    if copy.complete and sender ~= copy.leader then return end
+    wipe(copy.reserves)
+    copy.expected = tonumber(f[5]) or 0
+    copy.received = 0
+    copy.complete = copy.expected == 0
+end)
+
+Comm:RegisterHandler("GP", function(sender, f)
+    if not enabled() then return end
+    markSeen(sender)
+    local copy = copies()[f[3] or ""]
+    if not copy or copy.deleted or copy.complete or not copy.expected or copy.version ~= tonumber(f[4]) then
+        return
+    end
+    for entry in (f[5] or ""):gmatch("[^;]+") do
+        local player, ids = entry:match("^(.-)=(.*)$")
+        if player then
+            local list = {}
+            for i, itemID in ipairs(parseItemIDs(ids)) do
+                list[i] = { itemID = itemID, source = "guild" }
+            end
+            copy.reserves[player] = #list > 0 and list or nil
+        end
+    end
+    copy.received = (copy.received or 0) + 1
+    copy.complete = copy.received >= copy.expected
+    ns:Fire("SESSION_CHANGED")
+end)
+
+-- Löschmarke: vom Raidlead oder weitergegeben (Version entscheidet)
+Comm:RegisterHandler("GD", function(sender, f)
+    if not enabled() then return end
+    markSeen(sender)
+    local sid, version, leader = f[3], tonumber(f[4]) or 0, f[5]
+    if not sid or leader == me() then return end
+    local copy = copies()[sid]
+    if copy and (copy.version or 0) >= version then return end
+    if not copy and sender ~= leader then return end -- fremde Löschmarken nur für bekannte Sitzungen
+    copies()[sid] = { id = sid, deleted = true, version = version, leader = leader, deletedAt = GetServerTime() }
+    signups()[sid] = nil
+    ns.Debug("Guild", "Sitzung zurückgezogen", sid)
+    ns:Fire("SESSION_CHANGED")
+end)
+
+-- Login-Abfrage eines Mitglieds
+Comm:RegisterHandler("GQ", function(sender)
+    if not enabled() then return end
+    markSeen(sender)
+    -- eigene veröffentlichte Sitzungen (gedrosselt, falls viele Mitglieder kurz hintereinander einloggen)
+    for _, s in pairs(ns.db.sessions or {}) do
+        if s.published and not (lastPublished[s.id] and GetTime() - lastPublished[s.id] < REPUBLISH_MIN) then
+            schedulePublish(s, 0.5 + math.random())
+        end
+    end
+    -- Weitergabe von Kopien: nicht während eines Raids (Sende-Queue frei halten)
+    if (IsInGroup and IsInGroup()) or (IsInInstance and IsInInstance()) then return end
+    for sid, copy in pairs(copies()) do
+        if copy.deleted or copy.complete then
+            local delay = REPLY_DELAY_MIN + math.random() * (REPLY_DELAY_MAX - REPLY_DELAY_MIN)
+            C_Timer.After(delay, function()
+                local current = copies()[sid]
+                if not current or recentlyHeard(sid, current.version or 0) then return end
+                if current.deleted then
+                    sendTombstone(sid, current)
+                    heard[sid] = { version = current.version or 0, time = GetTime() }
+                elseif current.complete then
+                    sendSessionFull(current)
+                end
+            end)
+        end
+    end
+end)
+
+-- Anmeldung eines Raiders (Whisper an den Raidlead)
+Comm:RegisterHandler("GS", function(sender, f)
+    markSeen(sender)
+    local sid, signedAt = f[3] or "", tonumber(f[4]) or GetServerTime()
+    local function reject(text)
+        Comm:SendWhisper(sender, "GX", sid, signedAt, Comm.Sanitize(text))
+    end
+    if not enabled() then
+        reject("Gilden-Synchronisation beim Raidlead ist aus")
+        return
+    end
+    local s = ownSession(sid)
+    if not s or not s.published then
+        reject("Sitzung nicht (mehr) veröffentlicht")
+        return
+    end
+    local now = GetServerTime()
+    -- Abgabezeit plausibel halten: nicht in der Zukunft, nicht vor Anlage der Sitzung
+    local effective = math.max(math.min(signedAt, now), s.createdAt or 0)
+    if s.deadline and now > s.deadline + LATE_WINDOW then
+        reject("Anmeldung zu spät übertragen")
+        return
+    end
+    local ids = parseItemIDs(f[5])
+    -- Eine neuere Auswahl dieses Spielers (z. B. in der Gruppe) hat Vorrang
+    local changedAt = s.changedAt and s.changedAt[sender]
+    if changedAt and changedAt > effective then
+        Comm:SendWhisper(sender, "GA", sid, signedAt, 1)
+        return
+    end
+    -- Unveränderte Liste: nur bestätigen, nicht neu verteilen
+    if sameItems(ns.Session:GetReservedItemIDs(sender, s), ids) and (#ids > 0 or s.reserves[sender] == nil) then
+        Comm:SendWhisper(sender, "GA", sid, signedAt, 0)
+        return
+    end
+    local ok, err = ns.Session:SetPlayerReserves(sender, ids, "guild", s, effective)
+    if ok then
+        ns.Debug("Guild", "Anmeldung angenommen", sid, sender)
+        Comm:SendWhisper(sender, "GA", sid, signedAt, 0)
+    else
+        reject(err)
+    end
+end)
+
+-- Anmeldung verarbeitet
+Comm:RegisterHandler("GA", function(sender, f)
+    local copy = copies()[f[3] or ""]
+    local signup = signups()[f[3] or ""]
+    if not copy or not signup or copy.leader ~= sender or signup.signedAt ~= tonumber(f[4]) then return end
+    if f[5] == "1" then
+        signups()[copy.id] = nil -- es gibt eine neuere Auswahl (z. B. aus der Gruppe): Anmeldung überholt
+    else
+        signup.status = "confirmed"
+        signup.reason = nil
+    end
+    ns.Debug("Guild", "Anmeldung bestätigt", copy.id, f[5])
+    ns:Fire("SESSION_CHANGED")
+end)
+
+-- Anmeldung abgelehnt (nur, wenn sie zur aktuellen Anmeldung gehört)
+Comm:RegisterHandler("GX", function(sender, f)
+    local copy = copies()[f[3] or ""]
+    local signup = signups()[f[3] or ""]
+    if not copy or not signup or copy.leader ~= sender or signup.signedAt ~= tonumber(f[4]) then return end
+    signup.status = "rejected"
+    signup.reason = f[5]
+    ns.Print("Anmeldung für „" .. (copy.name or "?") .. "“ abgelehnt: " .. (f[5] or "?"))
+    ns:Fire("SESSION_CHANGED")
+end)
+
+-- Lebenszyklus -------------------------------------------------------------------------------------
+
+-- Alte Kopien und Löschmarken entfernen (am vom Raidlead gemeldeten Stand gemessen)
+local function prune()
+    local now = GetServerTime()
+    for sid, copy in pairs(copies()) do
+        local expired
+        if copy.deleted then
+            expired = now > (copy.deletedAt or 0) + KEEP_TOMBSTONE
+        elseif copy.deadline then
+            expired = now > copy.deadline + KEEP_AFTER_DEADLINE
+        else
+            expired = now > (copy.updatedAt or copy.receivedAt or 0) + KEEP_WITHOUT_DEADLINE
+        end
+        if expired then
+            copies()[sid] = nil
+        end
+    end
+    for sid in pairs(signups()) do
+        local copy = copies()[sid]
+        if not copy or copy.deleted then
+            signups()[sid] = nil
+        end
+    end
+end
+
+-- Erste Synchronisation, sobald die Gildenzugehörigkeit bekannt ist (bei PLAYER_LOGIN oft noch nicht)
+local initialSyncDone = false
+
+local function initialSync()
+    if initialSyncDone or not enabled() then return end
+    initialSyncDone = true
+    if C_GuildInfo and C_GuildInfo.GuildRoster then
+        C_GuildInfo.GuildRoster()
+    end
+    C_Timer.After(2 + math.random() * 3, function()
+        if not enabled() then return end
+        Comm:SendGuild("GQ")
+        for _, s in pairs(ns.db.sessions or {}) do
+            if s.published then
+                schedulePublish(s, 1)
+            end
+        end
+    end)
+    ns:Fire("SESSION_CHANGED")
+end
+
+function ns:GUILD_ROSTER_UPDATE()
+    refreshRoster()
+    initialSync()
+    sendPending()
+end
+
+function ns:PLAYER_GUILD_UPDATE()
+    initialSync()
+    ns:Fire("SESSION_CHANGED")
+end
+
+ns:On("LOGIN", function()
+    prune()
+    C_Timer.After(3, initialSync)
+end)
+
+-- Gruppenbeitritt (Raidstart): spätestens jetzt ausstehende Anmeldungen senden
+ns:On("ROSTER_CHANGED", function()
+    sendPending()
+end)
+
+-- Gilden-Synchronisation in den Optionen eingeschaltet
+ns:On("SESSION_CHANGED", function()
+    if not initialSyncDone then
+        initialSync()
+    end
+end)
+
+ns:RegisterEvent("GUILD_ROSTER_UPDATE")
+ns:RegisterEvent("PLAYER_GUILD_UPDATE")

@@ -150,7 +150,7 @@ end)
 modeButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, 4)
 
 function refreshList()
-    local s = ns.Session:Get()
+    local s = ns.Session:GetViewed()
     if not s then
         header:SetText("Keine Sitzung")
         scrollBox:Hide()
@@ -160,7 +160,7 @@ function refreshList()
     end
     if showHistory then
         local elements = buildHistoryElements(s)
-        header:SetText(string.format("%s – Verlauf, %d Items vergeben", s.instanceName or "keine Instanz", #elements))
+        header:SetText(string.format("%s – Verlauf, %d Items vergeben", UI.SessionTitle(s), #elements))
         scrollBox:SetShown(#elements > 0)
         emptyText:SetShown(#elements == 0)
         emptyText:SetText("Noch keine Items vergeben.")
@@ -171,8 +171,8 @@ function refreshList()
     local importText = importedCount > 0
         and string.format(" (|c%s%d aus softres.it|r)", IMPORT_COLOR, importedCount) or ""
     header:SetText(string.format("%s – %d Spieler, %d Reserves%s%s",
-        s.instanceName or "keine Instanz", playerCount, reserveCount, importText,
-        (ns.Session:IsLocked() or s.deadline) and (" – " .. UI.LockStateText(s)) or ""))
+        UI.SessionTitle(s), playerCount, reserveCount, importText,
+        (ns.Session:IsLocked(s) or s.deadline) and (" – " .. UI.LockStateText(s)) or ""))
     scrollBox:SetShown(#elements > 0)
     emptyText:SetShown(#elements == 0)
     emptyText:SetText("Noch keine Reserves.")

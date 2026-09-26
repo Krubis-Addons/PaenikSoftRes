@@ -19,8 +19,45 @@ local onItemLoaded = UI.Debounce(function() refreshList() end)
 
 -- Kopfzeile ---------------------------------------------------------------
 
+-- Sitzungswahl: Gruppensitzung, eigene Sitzungen und über die Gilde veröffentlichte Sitzungen
+local KIND_PREFIX = { group = "Gruppe: ", own = "", guild = "" }
+
+local viewDropdown = CreateFrame("DropdownButton", nil, panel, "WowStyle1DropdownTemplate")
+viewDropdown:SetWidth(SIDEBAR_WIDTH + 60)
+viewDropdown:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 2)
+viewDropdown:SetDefaultText("Keine Sitzung")
+
+local function isViewSelected(id)
+    local s = ns.Session:GetViewed()
+    return s ~= nil and s.id == id
+end
+
+local function selectView(id)
+    ns.Session:SetViewed(id)
+end
+
+viewDropdown:SetupMenu(function(_, root)
+    for _, entry in ipairs(ns.Session:ListViewable()) do
+        local s = entry.session
+        local text = KIND_PREFIX[entry.kind] .. (s.name or s.instanceName or "?")
+        if entry.kind == "guild" then
+            text = text .. " |cff999999(" .. UI.ShortName(s.leader or "?") .. ")|r"
+        end
+        root:CreateRadio(text, isViewSelected, selectView, s.id)
+    end
+end)
+
+-- Anzeigetext neu erzeugen, wenn Sitzungen dazukommen (einen Frame verzögert, s. LeadPanel)
+local regenerateViewMenu = UI.Debounce(function()
+    if not viewDropdown:IsMenuOpen() then
+        viewDropdown:GenerateMenu()
+    end
+end, 0)
+
 local statusText = UI.CreateText(panel, nil, nil, "GameFontNormal")
-statusText:SetWidth(540)
+statusText:ClearAllPoints()
+statusText:SetPoint("LEFT", viewDropdown, "RIGHT", 12, 0)
+statusText:SetWidth(330)
 
 local refreshButton = UI.CreateButton(panel, "Aktualisieren", 110, function()
     ns.Comm:RequestState()
@@ -32,8 +69,8 @@ emptyText:SetPoint("CENTER", panel, "CENTER", 0, -20)
 
 -- Eigene Reserves ändern und einreichen ------------------------------------
 
-local function submit(list)
-    local ok, err = ns.Comm:SubmitOwnReserves(list)
+local function submit(s, list)
+    local ok, err = ns.Signup:Submit(s, list)
     if not ok then
         ns.Print(err)
     end
@@ -41,9 +78,9 @@ local function submit(list)
 end
 
 local function canEdit()
-    local s = ns.Session:Get()
+    local s = ns.Session:GetViewed()
     if not s then return false end
-    if ns.Session:IsLocked() then
+    if ns.Session:IsLocked(s) then
         ns.Print(s.locked and "Die Sitzung ist gesperrt." or "Der Anmeldeschluss ist erreicht.")
         return false
     end
@@ -52,9 +89,9 @@ end
 
 local function toggleItem(itemID, addAnother)
     if not canEdit() then return end
-    local s = ns.Session:Get()
+    local s = ns.Session:GetViewed()
     -- enthält eine noch unbestätigte Auswahl, damit schnelle Klicks nichts verlieren
-    local list = ns.Comm:GetOwnReserves()
+    local list = ns.Signup:GetOwn(s)
     local position
     for i, id in ipairs(list) do
         if id == itemID then
@@ -72,15 +109,16 @@ local function toggleItem(itemID, addAnother)
         ns.Print("Limit erreicht (" .. s.maxReserves .. "). Erst ein Item entfernen.")
         return
     end
-    submit(list)
+    submit(s, list)
 end
 
 local function removeAt(index)
     if not canEdit() then return end
-    local list = ns.Comm:GetOwnReserves()
+    local s = ns.Session:GetViewed()
+    local list = ns.Signup:GetOwn(s)
     if list[index] then
         table.remove(list, index)
-        submit(list)
+        submit(s, list)
     end
 end
 
@@ -162,7 +200,7 @@ local function initBossRow(row, data)
 end
 
 local bossList = UI.CreateScrollList(panel, BOSS_ROW_HEIGHT, initBossRow)
-bossList:SetPoint("TOPLEFT", statusText, "BOTTOMLEFT", 0, -12)
+bossList:SetPoint("TOPLEFT", viewDropdown, "BOTTOMLEFT", 0, -10)
 bossList:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 0, 0)
 bossList:SetWidth(SIDEBAR_WIDTH)
 
@@ -216,12 +254,21 @@ for i = 1, ns.Session.MAX_RESERVES_LIMIT do
     myRows[i] = createMyRow(i)
 end
 
-local function refreshMyReserves(s)
-    local list = ns.Comm:GetOwnReserves()
+local function refreshMyReserves(s, kind)
+    local list = ns.Signup:GetOwn(s)
     local text = string.format("Meine Reserves (%d/%d)", #list, s.maxReserves)
-    if ns.Comm:IsRequestPending() then
+    local status, reason = ns.Signup:GetStatus(s)
+    if status == "pending" and kind == "guild" then
+        local online = ns.GuildSync:IsOnline(s.leader)
+        text = text .. "  |cffffd100ausstehend|r |cff999999(Raidlead "
+            .. (online and "online – wird gesendet" or "offline – wird übertragen, sobald er online ist") .. ")|r"
+    elseif status == "pending" then
         text = text .. "  |cffffd100warte auf Raidlead …|r"
-    elseif ns.Session:IsLocked() or s.deadline then
+    elseif status == "rejected" then
+        text = text .. "  |cffff6060abgelehnt: " .. (reason or "?") .. "|r"
+    elseif kind == "guild" and #list > 0 then
+        text = text .. "  |cff60ff60bestätigt|r"
+    elseif ns.Session:IsLocked(s) or s.deadline then
         text = text .. "  " .. UI.LockStateText(s)
     end
     myHeader:SetText(text)
@@ -243,7 +290,7 @@ local function refreshMyReserves(s)
             row.name:SetText(name)
             row.boss:SetText("|cff999999" .. (bossNameForItem(s, itemID) or "") .. "|r")
             row.remove:Show()
-            row.remove:SetEnabled(not ns.Session:IsLocked())
+            row.remove:SetEnabled(not ns.Session:IsLocked(s))
             row.bg:SetColorTexture(0.1, 0.6, 0.1, 0.2)
         else
             row.icon:Hide()
@@ -269,7 +316,7 @@ end
 local function onItemEnter(row)
     if not row.itemID then return end
     local hint = { "Klick: reservieren / entfernen" }
-    local s = ns.Session:Get()
+    local s = ns.Session:GetViewed()
     if s and s.allowDuplicates and s.maxReserves > 1 then
         table.insert(hint, "Shift-Klick: ein weiteres Mal reservieren")
     end
@@ -328,7 +375,7 @@ itemList:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -20, 0)
 
 local function countOwn()
     local mine = {}
-    for _, itemID in ipairs(ns.Comm:GetOwnReserves()) do
+    for _, itemID in ipairs(ns.Signup:GetOwn(ns.Session:GetViewed())) do
         mine[itemID] = (mine[itemID] or 0) + 1
     end
     return mine
@@ -394,21 +441,25 @@ local function buildItemElements(s, mineCount)
 end
 
 function refreshList()
-    local s = ns.Session:Get()
+    local s, kind = ns.Session:GetViewed()
+    regenerateViewMenu()
     local hasList = s ~= nil and s.instanceKey ~= nil
     bossList:SetShown(hasList)
     content:SetShown(hasList)
-    refreshButton:SetShown(IsInGroup and IsInGroup() and not ns.Session:IsMaster())
+    refreshButton:SetShown(kind == "group" or (IsInGroup and IsInGroup() and not s and not ns.Session:IsMaster()))
 
     if not s then
         statusText:SetText("Keine Sitzung")
-        emptyText:SetText("Noch keine Soft-Reserve-Sitzung.\nDer Raidlead muss eine Sitzung anlegen.")
+        emptyText:SetText("Noch keine Soft-Reserve-Sitzung.\nDer Raidlead muss eine Sitzung anlegen oder für die Gilde"
+            .. " veröffentlichen.")
         emptyText:Show()
         return
     end
-    local state = UI.LockStateText(s)
-    statusText:SetText(string.format("%s – Raidlead %s – %s",
-        s.instanceName or "keine Instanz", UI.ShortName(s.leader or "?"), state))
+    local leader = UI.ShortName(s.leader or "?")
+    if kind == "guild" then
+        leader = leader .. (ns.GuildSync:IsOnline(s.leader) and " |cff60ff60(online)|r" or " |cff999999(offline)|r")
+    end
+    statusText:SetText(string.format("Raidlead %s – %s", leader, UI.LockStateText(s)))
     if not hasList then
         emptyText:SetText("Der Raidlead hat noch keine Instanz gewählt.")
         emptyText:Show()
@@ -426,7 +477,7 @@ function refreshList()
     end
 
     -- „Meine Reserves“ bestimmt, wo die Loot-Liste beginnt
-    local shownRows = refreshMyReserves(s)
+    local shownRows = refreshMyReserves(s, kind)
     lootHeader:ClearAllPoints()
     lootHeader:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -18 - shownRows * ROW_HEIGHT - 12)
     lootHeader:SetText(selectedBoss == ALL_BOSSES and "Loot aller Bosse"

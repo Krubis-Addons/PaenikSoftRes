@@ -208,10 +208,13 @@ function UI.Confirm(text, onAccept, condition)
     confirmAction = onAccept -- nach Show: OnHide eines alten Dialogs räumt sonst auf
 end
 
--- Hat die Sitzung Reserves oder vergebene Items? (für Rückfragen)
-function UI.SessionHasData()
-    local s = ns.Session:Get()
-    return s ~= nil and (next(s.reserves) ~= nil or (s.history ~= nil and #s.history > 0))
+-- Titel einer Sitzung: Name, bei eigenem Namen zusätzlich die Instanz
+function UI.SessionTitle(s)
+    local instance = s.instanceName or "keine Instanz"
+    if s.name and s.name ~= "" and not s.nameAuto and not s.name:find(instance, 1, true) then
+        return s.name .. " (" .. instance .. ")"
+    end
+    return s.name or instance
 end
 
 -- Zeitpunkt als "Sa, 27.09. 20:00" (Wochentage deutsch, date() liefert sie nur englisch)

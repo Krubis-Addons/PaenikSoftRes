@@ -27,7 +27,7 @@ Es gibt ein Oberfläche beim Looten mit den Soft Reserve Informationen pro Item.
 
 ## Besonderheiten dieses Addons
 - Roadmap und Status der Iterationen: `ROADMAP.md`
-- Datenmodell: `ns.db.session` (siehe Kopfkommentar in `Session.lua`). Spielerschlüssel immer `Name-Realm` über `ns.FullName(unit)`.
+- Datenmodell: mehrere Sitzungen `db.sessions[id]`, aktive `db.activeSessionId` (wird an die Gruppe verteilt), Spiegel beim Raider `db.remoteSession` (siehe Kopf von `Session.lua`). `Session:Get()` liefert die aktuelle (Raidlead: aktive eigene, Raider in der Gruppe: Spiegel) – immer darüber zugreifen. Spielerschlüssel immer `Name-Realm` über `ns.FullName(unit)`.
 - Interne Ereignisse über `ns:On(name, fn)` / `ns:Fire(name, ...)`: `DB_READY`, `LOGIN`, `SESSION_CHANGED`, `ROLE_CHANGED`.
 - Rolle (`ns.Roles:IsLead()`): `db.forceRole` (Slash `lead|raider|auto`) > solo = Raidlead > in der Gruppe nur der Gruppenleiter. Maßgebliche Master-Liste nur bei `Session:IsMaster()` (Besitzer + Raidlead); ein neuer Gruppenleiter kann eine fremde Sitzung übernehmen (`Session:TakeOver`).
 - Verfügbarkeit: Der Forever-Server kennt nicht alle Classic-Items. `LootData:GetDisplayEncounters` blendet Items mit `ITEM_DATA_LOAD_RESULT` = false aus und füllt Bosse unter 6 Items aus `filler` der Instanz auf. UI immer über GetDisplayEncounters, Validierung (Session) über alle Items + filler.
@@ -45,3 +45,5 @@ Es gibt ein Oberfläche beim Looten mit den Soft Reserve Informationen pro Item.
 - Bibliotheken in `Libs/` (unverändert, von luacheck ausgenommen): LibStub, LibDeflate (zlib-Lizenz, für den Gargul-Export von softres.it).
 - Testdaten: `Data/Instances/ForeverDungeons.lua` (7 Forever-Beta-Dungeons, aus ForeverDungeonJournal v1.1 bzw. dessen SOURCES.txt).
 - Anmeldeschluss: `session.deadline` (Zeitstempel, `GetServerTime`/`time()`). `Session:IsLocked()` = manuell gesperrt ODER Schluss erreicht – immer statt `s.locked` prüfen. Beim Raidlead sperrt ein Timer die Sitzung zum Schluss und sagt es an; „Öffnen“ danach entfernt den Schluss. Übertragen als 10. Feld der `R`-Nachricht.
+- Gilden-Synchronisation (`GuildSync.lua`, Protokoll im Dateikopf, Kanal GUILD, unsichtbar): veröffentlichte eigene Sitzungen (`session.published`, `version` via `Session:Touch`) werden als Kopien in `db.guildSessions` gehalten und von allen Mitgliedern weitergegeben; Löschmarken (`deleted`) verhindern Wiederkehr. Anmeldungen der Raider in `db.signups` (pending/confirmed/rejected), Bestätigung per `GA`. Vor jedem Whisper Online-Prüfung über den Gildenroster (sonst sichtbare „Spieler nicht gefunden“-Meldung). Raider-Tab/Übersicht nutzen `Session:GetViewed()` und `ns.Signup` (own/group/guild).
+- Anmeldeschluss sperrt nicht hart (`locked` bleibt false), damit rechtzeitig abgegebene Gilden-Anmeldungen (`signedAt`) auch danach angenommen werden (bis 24 h). Sende-Queue: GUILD-Nachrichten haben die niedrigste Priorität.

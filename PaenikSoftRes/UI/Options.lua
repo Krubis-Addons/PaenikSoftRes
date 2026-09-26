@@ -83,6 +83,15 @@ local debugCheck = createCheckbox(durationLabel, -18, "Debug-Log und Testbefehle
 debugCheck:ClearAllPoints()
 debugCheck:SetPoint("TOPLEFT", durationLabel, "BOTTOMLEFT", -4, -18)
 
+createCheckbox(debugCheck, -4, "Gilden-Synchronisation",
+    "Veröffentlichte Sitzungen über die Gilde empfangen und weitergeben, ohne Gruppe reservieren. "
+        .. "Unsichtbare Addon-Nachrichten, kein Chat.",
+    function() return ns.db.guildSync ~= false end,
+    function(value)
+        ns.db.guildSync = value
+        ns:Fire("SESSION_CHANGED")
+    end)
+
 -- Blizzard ruft OnRefresh beim Anzeigen der Seite auf
 function panel:OnRefresh()
     for _, refresh in ipairs(refreshers) do

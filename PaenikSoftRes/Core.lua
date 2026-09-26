@@ -3,14 +3,15 @@ local addonName, ns = ...
 -- Anzeigename im Spiel (Ordner und SavedVariables heißen weiter PaenikSoftRes)
 ns.TITLE = "PÄNIK SoftRes"
 
-local DB_VERSION = 1
+local DB_VERSION = 2 -- 2: mehrere Sitzungen (db.sessions statt db.session)
 
 local defaults = {
     version = DB_VERSION,
     showOnLogin = true,
     debug = false, -- Debug-Log und Testbefehle (Optionen oder /paeniksoftres debug)
+    guildSync = true, -- Gilden-Synchronisation (GuildSync.lua)
     -- forceRole: nil = automatisch, "lead" oder "raider" (zum Testen)
-    -- session: aktuelle Soft-Reserve-Sitzung, siehe Session.lua
+    -- sessions, activeSessionId, remoteSession: Soft-Reserve-Sitzungen, siehe Session.lua
 }
 
 local eventFrame = CreateFrame("Frame")
@@ -102,7 +103,7 @@ function ns:ADDON_LOADED(name)
     PaenikSoftResDB.version = DB_VERSION
     ns.db = PaenikSoftResDB
     eventFrame:UnregisterEvent("ADDON_LOADED")
-    ns.Debug("Core", "Datenbank initialisiert, Sitzung vorhanden:", ns.db.session ~= nil)
+    ns.Debug("Core", "Datenbank initialisiert, Version", ns.db.version)
     -- Bis hierher wurde immer protokolliert (Ladephase), ab jetzt gilt die Einstellung
     ns.debugEnabled = ns.db.debug
     if not ns.db.debug and ns.db.forceRole then
@@ -223,6 +224,7 @@ end
 
 function ns:PLAYER_LOGIN()
     migratePlayerKeys()
+    ns.Session:MigrateSingleSession() -- nach den Namen: der Leiter muss schon im neuen Format sein
     ns.Debug("Core", "PLAYER_LOGIN, Interface", select(4, GetBuildInfo()), "Spieler", ns.FullName("player"))
     ns:Fire("LOGIN")
     if ns.db.showOnLogin and ns.mainFrame then

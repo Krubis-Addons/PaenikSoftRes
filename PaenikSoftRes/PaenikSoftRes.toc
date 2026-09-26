@@ -20,6 +20,7 @@ Data\Instances\ForeverDungeons.lua
 Comm.lua
 Rolls.lua
 Import.lua
+GuildSync.lua
 UI\MainFrame.lua
 UI\MinimapButton.lua
 UI\RaiderPanel.lua

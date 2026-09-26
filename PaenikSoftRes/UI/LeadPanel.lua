@@ -1,4 +1,4 @@
--- Raidlead-Tab: Sitzung anlegen und Regeln festlegen.
+-- Raidlead-Tab: Sitzungen verwalten (mehrere Raids) und Regeln der aktiven Sitzung festlegen.
 local _, ns = ...
 
 local UI = ns.UI
@@ -8,15 +8,74 @@ local LABEL_WIDTH = 150
 
 local header = UI.CreateText(panel, nil, nil, "GameFontNormalLarge")
 header:SetText("Raidlead")
-local sessionText = UI.CreateText(panel, header, -10)
 
--- Ohne Sitzung: nur der Start-Button
-local newButton = UI.CreateButton(panel, "Neue Sitzung", 140, function()
+-- Sitzungsauswahl: alle eigenen Sitzungen, die aktive wird an die Gruppe verteilt
+local sessionLabel = UI.CreateText(panel, header, -14, "GameFontNormal")
+sessionLabel:SetWidth(LABEL_WIDTH)
+sessionLabel:SetText("Sitzung:")
+
+local sessionDropdown = CreateFrame("DropdownButton", nil, panel, "WowStyle1DropdownTemplate")
+sessionDropdown:SetWidth(290)
+sessionDropdown:SetPoint("LEFT", sessionLabel, "RIGHT", 0, 0)
+sessionDropdown:SetDefaultText("Keine Sitzung")
+
+local function newSession()
     ns.Session:New(ns.FullName("player"))
+end
+
+local function isSessionSelected(id)
+    return ns.Session:GetActiveID() == id
+end
+
+local function selectSession(id)
+    if isSessionSelected(id) then return end
+    UI.Confirm("Aktive Sitzung der Gruppe wechseln?\nDie Gruppe bekommt die gewählte Sitzung.",
+        function() ns.Session:SetActive(id) end,
+        ns.GroupChannel() ~= nil)
+end
+
+sessionDropdown:SetupMenu(function(_, root)
+    local sessions = ns.Session:List()
+    for _, s in ipairs(sessions) do
+        local text = (s.name or "?") .. "  " .. UI.LockStateText(s)
+        root:CreateRadio(text, isSessionSelected, selectSession, s.id)
+    end
+    if #sessions > 0 then
+        root:CreateDivider()
+    end
+    root:CreateButton("Neue Sitzung anlegen", newSession)
 end)
+
+-- Name der aktiven Sitzung (Enter übernimmt, leer = automatischer Name)
+local nameBox = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+nameBox:SetSize(170, 20)
+nameBox:SetPoint("LEFT", sessionDropdown, "RIGHT", 14, 0)
+nameBox:SetAutoFocus(false)
+nameBox:SetMaxLetters(40)
+nameBox:SetScript("OnEnterPressed", function(self)
+    ns.Session:Rename(self:GetText())
+    self:ClearFocus()
+end)
+nameBox:SetScript("OnEscapePressed", function(self)
+    local s = ns.Session:Get()
+    self:SetText(s and s.name or "")
+    self:ClearFocus()
+end)
+nameBox:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText("Name der Sitzung")
+    GameTooltip:AddLine("Enter übernimmt. Leer lassen für den automatischen Namen.", 1, 1, 1, true)
+    GameTooltip:Show()
+end)
+nameBox:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+local sessionText = UI.CreateText(panel, sessionLabel, -16)
+
+-- Ohne aktive Sitzung: Start-Button
+local newButton = UI.CreateButton(panel, "Neue Sitzung", 140, newSession)
 newButton:SetPoint("TOPLEFT", sessionText, "BOTTOMLEFT", 0, -16)
 
--- Fremde Sitzung (z. B. nach Übergabe der Gruppenleitung): übernehmen inkl. Reserves
+-- Sitzung des bisherigen Gruppenleiters (nach Übergabe der Leitung): als eigene übernehmen
 local takeOverButton = UI.CreateButton(panel, "Sitzung übernehmen", 160, function()
     ns.Session:TakeOver(ns.FullName("player"))
 end)
@@ -121,6 +180,27 @@ local lockButton = UI.CreateButton(rules, "Sperren", 140, function()
     end
 end)
 lockButton:SetPoint("TOPLEFT", lockText, "BOTTOMLEFT", 0, -8)
+
+-- Für die Gilde veröffentlichen: Raider können ohne Gruppe reservieren (GuildSync.lua)
+local publishCheck = CreateFrame("CheckButton", nil, rules, "UICheckButtonTemplate")
+publishCheck:SetPoint("LEFT", lockButton, "RIGHT", 20, 0)
+publishCheck.Text:SetText("Für die Gilde veröffentlichen")
+publishCheck.Text:SetFontObject("GameFontHighlight")
+publishCheck:SetScript("OnClick", function(self)
+    ns.GuildSync:SetPublished(ns.Session:Get(), self:GetChecked())
+end)
+publishCheck:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Für die Gilde veröffentlichen")
+    GameTooltip:AddLine("Gildenmitglieder mit dem Addon sehen die Sitzung und können ohne Gruppe bis zum "
+        .. "Anmeldeschluss reservieren. Ihre Anmeldungen kommen an, sobald ihr gleichzeitig online seid.",
+        1, 1, 1, true)
+    GameTooltip:Show()
+end)
+publishCheck:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+local guildInfo = rules:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+guildInfo:SetPoint("LEFT", publishCheck.Text, "RIGHT", 10, 0)
 
 -- Anmeldeschluss: optionaler Zeitpunkt, danach ist die Sitzung automatisch geschlossen
 local DEFAULT_HOUR, DEFAULT_MIN = 20, 0
@@ -235,16 +315,14 @@ end)
 local durationHint = UI.CreateText(rules, durationLabel, -10, "GameFontHighlightSmall")
 durationHint:SetText("Mit Zeitfenster endet die Runde automatisch; vorzeitiges Beenden bleibt möglich.")
 
--- Unten: Sitzung neu starten / verwerfen
-local restartButton = UI.CreateButton(rules, "Neu starten", 140, function()
-    UI.Confirm("Neue Sitzung starten?\nAlle Reserves, Regeln und der Verlauf werden verworfen.", function()
-        ns.Session:New(ns.FullName("player"))
-    end, UI.SessionHasData())
-end)
+-- Unten: weitere Sitzung anlegen / aktive löschen / Import
+local restartButton = UI.CreateButton(rules, "Neue Sitzung", 140, newSession)
 restartButton:SetPoint("BOTTOMLEFT", rules, "BOTTOMLEFT", 0, 4)
 
-local resetButton = UI.CreateButton(rules, "Sitzung verwerfen", 140, function()
-    UI.Confirm("Sitzung verwerfen?\nReserves und Verlauf gehen verloren, die Gruppe wird informiert.", function()
+local resetButton = UI.CreateButton(rules, "Sitzung löschen", 140, function()
+    local s = ns.Session:Get()
+    UI.Confirm("Sitzung „" .. (s and s.name or "?") .. "“ löschen?\n"
+        .. "Reserves und Verlauf gehen verloren, die Gruppe wird informiert.", function()
         ns.Session:Reset()
     end)
 end)
@@ -255,20 +333,36 @@ local importButton = UI.CreateButton(rules, "softres.it-Import", 150, function()
 end)
 importButton:SetPoint("LEFT", resetButton, "RIGHT", 8, 0)
 
+-- Anzeigetext des Sitzungs-Dropdowns neu erzeugen (neue/gelöschte Sitzungen); einen Frame verzögert,
+-- weil refresh auch aus einer Menü-Antwort kommen kann
+local regenerateSessionMenu = UI.Debounce(function()
+    if not sessionDropdown:IsMenuOpen() then
+        sessionDropdown:GenerateMenu()
+    end
+end, 0)
+
 local function refresh()
+    regenerateSessionMenu()
     local s = ns.Session:Get()
     local isOwner = ns.Session:IsOwner()
+    local remote = ns.Session:GetRemote()
+    -- Übernehmen nur in einer Gruppe (ein alter Spiegel bleibt nach dem Raid gespeichert)
+    local canTakeOver = remote ~= nil and remote.leader ~= ns.FullName("player") and ns.GroupChannel() ~= nil
     newButton:SetShown(not isOwner)
-    takeOverButton:SetShown(s ~= nil and not isOwner)
+    takeOverButton:SetShown(canTakeOver and not isOwner)
     rules:SetShown(isOwner)
-    if not s then
-        sessionText:SetText("Keine Sitzung. Lege eine neue Sitzung an, um die Regeln festzulegen.")
-        return
+    nameBox:SetShown(isOwner)
+    if isOwner and not nameBox:HasFocus() then
+        nameBox:SetText(s.name or "")
+        nameBox:SetCursorPosition(0)
     end
     if not isOwner then
-        sessionText:SetText(string.format(
-            "Die aktuelle Sitzung gehört %s.\nÜbernimm sie mit allen Reserves oder lege eine neue an.",
-            UI.ShortName(s.leader or "?")))
+        if canTakeOver then
+            sessionText:SetText(string.format("Keine aktive Sitzung. Die Gruppe nutzt noch die Sitzung von %s –"
+                .. " übernimm sie mit allen Reserves oder lege eine neue an.", UI.ShortName(remote.leader or "?")))
+        else
+            sessionText:SetText("Keine aktive Sitzung. Wähle oben eine Sitzung oder lege eine neue an.")
+        end
         return
     end
 
@@ -276,7 +370,9 @@ local function refresh()
     for _, list in pairs(s.reserves) do
         reserveCount = reserveCount + #list
     end
-    sessionText:SetText(string.format("Sitzung von %s, %d Reserves", s.leader or "?", reserveCount))
+    local count = #ns.Session:List()
+    sessionText:SetText(string.format("%d Reserves%s – diese Sitzung ist aktiv und wird an die Gruppe verteilt",
+        reserveCount, count > 1 and (" (" .. count .. " Sitzungen insgesamt)") or ""))
 
     if s.instanceKey then
         local bosses, items = ns.LootData:GetStats(s.instanceKey)
@@ -299,6 +395,15 @@ local function refresh()
     durationDropdown:SignalUpdate()
     dayDropdown:SignalUpdate()
     timeDropdown:SignalUpdate()
+
+    local inGuild = IsInGuild and IsInGuild() and ns.db.guildSync ~= false
+    publishCheck:SetShown(inGuild)
+    guildInfo:SetShown(inGuild and s.published == true)
+    publishCheck:SetChecked(s.published == true)
+    if s.published then
+        guildInfo:SetText(string.format("|cff60ff60%d Anmeldungen über die Gilde|r",
+            ns.GuildSync:CountGuildSignups(s)))
+    end
 
     if locked then
         lockText:SetText("Status: " .. UI.LockStateText(s) .. " – keine Änderungen an Regeln und Reserves")
