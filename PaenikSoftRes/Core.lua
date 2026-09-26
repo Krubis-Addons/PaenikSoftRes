@@ -103,6 +103,9 @@ function ns:ADDON_LOADED(name)
     end
     PaenikSoftResDB.version = DB_VERSION
     ns.db = PaenikSoftResDB
+    -- Sitzungsdaten pro Charakter (siehe Kopf von Session.lua)
+    PaenikSoftResCharDB = PaenikSoftResCharDB or {}
+    ns.char = PaenikSoftResCharDB
     eventFrame:UnregisterEvent("ADDON_LOADED")
     ns.Debug("Core", "Datenbank initialisiert, Version", ns.db.version)
     -- Bis hierher wurde immer protokolliert (Ladephase), ab jetzt gilt die Einstellung
@@ -226,6 +229,7 @@ end
 function ns:PLAYER_LOGIN()
     migratePlayerKeys()
     ns.Session:MigrateSingleSession() -- nach den Namen: der Leiter muss schon im neuen Format sein
+    ns.Session:MigrateToCharacter()
     ns.Debug("Core", "PLAYER_LOGIN, Interface", select(4, GetBuildInfo()), "Spieler", ns.FullName("player"))
     ns:Fire("LOGIN")
     if ns.db.showOnLogin and ns.mainFrame then

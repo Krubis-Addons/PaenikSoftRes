@@ -298,8 +298,8 @@ function Comm:SubmitOwnReserves(itemIDs)
     local ok, err = ns.Session:ValidateReserves(itemIDs, me)
     if not ok then return false, err end
     -- Eine ältere Gilden-Anmeldung für diese Sitzung ist damit überholt
-    if ns.db.signups then
-        ns.db.signups[s.id] = nil
+    if ns.char.signups then
+        ns.char.signups[s.id] = nil
     end
 
     pendingOwn = CopyTable(itemIDs)

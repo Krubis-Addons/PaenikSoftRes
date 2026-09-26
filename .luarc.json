@@ -4,6 +4,7 @@
   "diagnostics.globals": [
     "PaenikSoftResDB",
     "PaenikSoftResDebugLog",
+    "PaenikSoftResCharDB",
     "PanelTemplates_SetNumTabs",
     "PanelTemplates_SetTab",
     "PanelTemplates_SetTabEnabled",

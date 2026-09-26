@@ -97,7 +97,13 @@ function UI.CreateScrollList(parent, rowHeight, initializer)
     ScrollUtil.InitScrollBoxListWithScrollBar(scrollBox, scrollBar, view)
     -- Wurde die Liste im selben Moment eingeblendet und befüllt, ist ihre Größe evtl. noch nicht
     -- berechnet und es erscheinen keine Zeilen. Einen Frame später mit gültiger Größe neu aufbauen.
+    -- Der Balken hängt am Elternframe: mit der Liste aus- und einblenden (sonst bleibt er z. B. ohne
+    -- Sitzung stehen und liegt über dem Hinweistext)
+    scrollBox:HookScript("OnHide", function()
+        scrollBar:Hide()
+    end)
     scrollBox:HookScript("OnShow", function(self)
+        scrollBar:Show()
         C_Timer.After(0, function()
             if self:IsVisible() then
                 self:FullUpdate(ScrollBoxConstants.UpdateImmediately)

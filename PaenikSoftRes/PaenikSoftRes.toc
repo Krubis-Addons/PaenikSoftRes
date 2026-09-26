@@ -5,6 +5,7 @@
 ## Version: @project-version@
 ## IconTexture: Interface\Cursor\LootAll
 ## SavedVariables: PaenikSoftResDB, PaenikSoftResDebugLog
+## SavedVariablesPerCharacter: PaenikSoftResCharDB
 
 Libs\LibStub\LibStub.lua
 Libs\LibDeflate\LibDeflate.lua
@@ -22,6 +23,7 @@ Comm.lua
 Rolls.lua
 GargulCompat.lua
 Owned.lua
+Wishlist.lua
 Import.lua
 GuildSync.lua
 UI\MainFrame.lua

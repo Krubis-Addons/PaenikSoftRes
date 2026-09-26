@@ -10,7 +10,7 @@ Es soll Möglichkeiten geschaffen werden externe Quellen anzubinden um einen Üb
 ## Projektdetails
 - Addon-Code: `PaenikSoftRes/` (per Junction im Spiel verlinkt)
 - Zielversion: WoW: Forever (Interface 16001) – bei Bedarf anpassen
-- SavedVariables: `PaenikSoftResDB` (Einstellungen), `PaenikSoftResDebugLog` (Debug-Log)
+- SavedVariables: `PaenikSoftResDB` (Account: Einstellungen, Wunschliste, Bank-Speicher; `ns.db`), `PaenikSoftResCharDB` (pro Charakter: Sitzungen, Spiegel, Anmeldungen, Gildenkopien; `ns.char`), `PaenikSoftResDebugLog` (Debug-Log)
 - Slash-Befehl: `/paeniksoftres`
 
 
@@ -27,7 +27,7 @@ Es gibt ein Oberfläche beim Looten mit den Soft Reserve Informationen pro Item.
 
 ## Besonderheiten dieses Addons
 - Roadmap und Status der Iterationen: `ROADMAP.md`
-- Datenmodell: mehrere Sitzungen `db.sessions[id]`, aktive `db.activeSessionId` (wird an die Gruppe verteilt), Spiegel beim Raider `db.remoteSession` (siehe Kopf von `Session.lua`). `Session:Get()` liefert die aktuelle (Raidlead: aktive eigene, Raider in der Gruppe: Spiegel) – immer darüber zugreifen. Spielerschlüssel immer `Name-Realm` über `ns.FullName(unit)`.
+- Datenmodell (pro Charakter in `ns.char`, Migration aus dem Account-DB in `Session:MigrateToCharacter`): mehrere Sitzungen `char.sessions[id]`, aktive `char.activeSessionId` (wird an die Gruppe verteilt), Spiegel beim Raider `char.remoteSession` (siehe Kopf von `Session.lua`). `Session:Get()` liefert die aktuelle (Raidlead: aktive eigene, Raider in der Gruppe: Spiegel) – immer darüber zugreifen. Spielerschlüssel immer `Name-Realm` über `ns.FullName(unit)`.
 - Interne Ereignisse über `ns:On(name, fn)` / `ns:Fire(name, ...)`: `DB_READY`, `LOGIN`, `SESSION_CHANGED`, `ROLE_CHANGED`.
 - Rolle (`ns.Roles:IsLead()`): `db.forceRole` (Slash `lead|raider|auto`) > solo = Raidlead > in der Gruppe nur der Gruppenleiter. Maßgebliche Master-Liste nur bei `Session:IsMaster()` (Besitzer + Raidlead); ein neuer Gruppenleiter kann eine fremde Sitzung übernehmen (`Session:TakeOver`).
 - Verfügbarkeit: Der Forever-Server kennt nicht alle Classic-Items. `LootData:GetDisplayEncounters` blendet Items mit `ITEM_DATA_LOAD_RESULT` = false aus und füllt Bosse unter 6 Items aus `filler` der Instanz auf. UI immer über GetDisplayEncounters, Validierung (Session) über alle Items + filler.
@@ -44,6 +44,7 @@ Es gibt ein Oberfläche beim Looten mit den Soft Reserve Informationen pro Item.
 - Rückfragen über `UI.Confirm(text, onAccept, condition)` (eigener Frame, keine `StaticPopupDialogs`).
 - Bibliotheken in `Libs/` (unverändert, von luacheck ausgenommen): LibStub, LibDeflate (zlib-Lizenz, für den Gargul-Export von softres.it), LibSerialize (MIT, für Gargul-Nachrichten).
 - Besitz-Anzeige (`Owned.lua`): `ns.Owned:Has/PlacesText(itemID)` – Taschen/angelegt live über `C_Item.GetItemCount`/`IsEquippedItem`, Bank nur bei offener Bank sicher, daher beim Bankbesuch alle Loot-Tabellen-Items geprüft und pro Charakter in `db.ownedBank[Name-Realm]` gemerkt. Ereignis `OWNED_CHANGED`. Raider-Tab: „Im Besitz“, Tooltip-Zeile, Rückfrage beim Reservieren.
+- Wunschliste (`Wishlist.lua`): rein lokal pro Charakter in `db.wishlist[Name-Realm][itemID]`, Ereignis `WISHLIST_CHANGED`. Raider-Tab: Alt-Klick oder Rechtsklick-Menü, Stern (Atlas `auctionhouse-icon-favorite`, sonst gelbes „W“), Eintrag „Wunschliste“ in der Bossliste (`WISHLIST = -1`); Stern auch im Loot-Panel, Würfelfenster und Item-Tooltip. Eigener Gewinn einer Würfelrunde entfernt das Item (`addHistory` in Rolls.lua).
 - Gargul-Kompatibilität (`GargulCompat.lua`, Protokoll im Dateikopf): `Rolls:Start` sendet zusätzlich eine Gargul-Startnachricht (Präfix `GargulComm2`, AceComm-Stückelung von Hand über `Comm:SendRaw`), damit Raider nur mit Gargul dessen Würfelfenster bekommen; Knöpfe mit unseren Bereichen (100/50/25), die Würfe wertet Rolls.lua wie jeden /roll aus. Nicht gesendet, wenn Gargul beim Raidlead selbst geladen ist. Option `db.gargulCompat`, Selbsttest `/paeniksoftres gargultest`.
 - Testdaten: `Data/Instances/ForeverDungeons.lua` (7 Forever-Beta-Dungeons, aus ForeverDungeonJournal v1.1 bzw. dessen SOURCES.txt).
 - Anmeldeschluss: `session.deadline` (Zeitstempel, `GetServerTime`/`time()`). `Session:IsLocked()` = manuell gesperrt ODER Schluss erreicht – immer statt `s.locked` prüfen. Beim Raidlead sperrt ein Timer die Sitzung zum Schluss und sagt es an; „Öffnen“ danach entfernt den Schluss. Übertragen als 10. Feld der `R`-Nachricht.

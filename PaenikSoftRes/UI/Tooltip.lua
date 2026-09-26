@@ -5,10 +5,15 @@ local _, ns = ...
 local UI = ns.UI
 
 local function onItemTooltip(tooltip, data)
-    if not data or not ns.Session:Get() then return end
+    if not data then return end
     local itemID = data.id
     if issecretvalue and issecretvalue(itemID) then return end
     if type(itemID) ~= "number" then return end
+    -- Wunschliste auch ohne Sitzung (z. B. Item-Links im Chat)
+    if ns.Wishlist:Has(itemID) then
+        tooltip:AddLine(ns.Wishlist.Icon() .. " |cffffd100Auf deiner Wunschliste|r")
+    end
+    if not ns.Session:Get() then return end
     local hr = ns.Session:GetHardReserve(itemID)
     if hr then
         tooltip:AddLine(" ")

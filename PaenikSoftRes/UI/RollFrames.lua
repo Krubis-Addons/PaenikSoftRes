@@ -189,7 +189,7 @@ function refreshPopup()
     popup.itemID = round.itemID
     local name, icon = UI.GetItemDisplay(round.itemID, onPopupItemLoaded)
     popupIcon:SetTexture(icon)
-    popupName:SetText(name)
+    popupName:SetText(ns.Wishlist:Has(round.itemID) and (ns.Wishlist.Icon() .. " " .. name) or name)
     popupInfo:SetText(holdersText(round))
     popupName:SetPoint("RIGHT", popup, "RIGHT", round.endsAt and -70 or -12, 0)
     updatePopupTime()

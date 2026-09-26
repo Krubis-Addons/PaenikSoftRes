@@ -92,7 +92,7 @@ local function refresh()
         row.item = item
         local name, icon = UI.GetItemDisplay(item.itemID)
         row.icon:SetTexture(icon)
-        row.name:SetText(name)
+        row.name:SetText(ns.Wishlist:Has(item.itemID) and (ns.Wishlist.Icon() .. " " .. name) or name)
         -- Stand des Items: wird ausgewürfelt > vergeben (letztes Ergebnis) > SR-Inhaber
         local awards = ns.Rolls:GetAwards(item.lootKey)
         local award = awards[#awards]
@@ -212,6 +212,7 @@ end)
 ns:On("SESSION_CHANGED", refreshIfShown)
 ns:On("ROLL_CHANGED", refreshIfShown)
 ns:On("ROSTER_CHANGED", refreshIfShown)
+ns:On("WISHLIST_CHANGED", refreshIfShown)
 
 -- Gespeicherte Position verwerfen und (falls offen) sofort wieder am Lootfenster andocken
 function ns.ResetLootPanelPosition()

@@ -12,6 +12,7 @@ ignore = {
 globals = {
     "PaenikSoftResDB",
     "PaenikSoftResDebugLog",
+    "PaenikSoftResCharDB",
     "SlashCmdList",
     "SLASH_PAENIKSOFTRES1",
 }

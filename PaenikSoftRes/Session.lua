@@ -1,9 +1,11 @@
 -- Datenmodell der Soft-Reserve-Sitzungen (ohne UI).
 -- Der Raidlead kann mehrere Sitzungen verwalten (mehrere Raids); eine davon ist aktiv und wird an die
 -- Gruppe synchronisiert. Raider spiegeln die aktive Sitzung des Gruppenleiters.
---   ns.db.sessions        = { [id] = session }   eigene Sitzungen
---   ns.db.activeSessionId = id                   aktive eigene Sitzung
---   ns.db.remoteSession   = session              Spiegel vom Gruppenleiter (nur Raider)
+--   ns.char.sessions        = { [id] = session }   eigene Sitzungen
+--   ns.char.activeSessionId = id                   aktive eigene Sitzung
+--   ns.char.remoteSession   = session              Spiegel vom Gruppenleiter (nur Raider)
+-- ns.char = PaenikSoftResCharDB (pro Charakter): Sitzungen, Spiegel, Anmeldungen, Gildenkopien.
+-- ns.db = PaenikSoftResDB (Account): Einstellungen, Wunschliste/Bank-Speicher (nach Charakter geschlüsselt).
 -- session = {
 --     id, leader, createdAt,
 --     name, nameAuto,  -- Anzeigename; nameAuto = true, solange er automatisch vergeben ist
@@ -53,13 +55,13 @@ end
 
 local function ownSessions()
     if not ns.db then return {} end
-    ns.db.sessions = ns.db.sessions or {}
-    return ns.db.sessions
+    ns.char.sessions = ns.char.sessions or {}
+    return ns.char.sessions
 end
 
 local function ownActive()
-    local db = ns.db
-    return db and db.activeSessionId and db.sessions and db.sessions[db.activeSessionId] or nil
+    local char = ns.char
+    return char and char.activeSessionId and char.sessions and char.sessions[char.activeSessionId] or nil
 end
 
 -- Die „aktuelle“ Sitzung: für Raider in einer Gruppe der Spiegel des Gruppenleiters,
@@ -67,13 +69,13 @@ end
 function Session:Get()
     if not ns.db then return nil end
     if not ns.Roles:IsLead() then
-        return ns.db.remoteSession
+        return ns.char.remoteSession
     end
     return ownActive()
 end
 
 function Session:GetRemote()
-    return ns.db and ns.db.remoteSession
+    return ns.char and ns.char.remoteSession
 end
 
 -- Eigene Sitzungen, älteste zuerst
@@ -102,7 +104,7 @@ function Session:ListViewable()
     end
     local guild = {}
     local myKey = ns.FullName("player")
-    local guildSessions = (ns.db and ns.db.guildSync ~= false) and ns.db.guildSessions or {}
+    local guildSessions = (ns.db and ns.db.guildSync ~= false) and ns.char.guildSessions or {}
     for id, s in pairs(guildSessions) do
         if id ~= groupID and s.leader ~= myKey and not s.deleted then
             table.insert(guild, s)
@@ -122,16 +124,16 @@ function Session:GetViewed()
     local current = self:Get()
     local remote = self:GetRemote()
     local isGroup = remote ~= nil and current == remote
-    local wanted = ns.db.viewSessionId
+    local wanted = ns.char.viewSessionId
     if wanted then
         if isGroup and remote.id == wanted then
             return remote, "group"
         end
-        local own = ns.db.sessions and ns.db.sessions[wanted]
+        local own = ns.char.sessions and ns.char.sessions[wanted]
         if own then
             return own, "own"
         end
-        local copy = ns.db.guildSync ~= false and ns.db.guildSessions and ns.db.guildSessions[wanted]
+        local copy = ns.db.guildSync ~= false and ns.char.guildSessions and ns.char.guildSessions[wanted]
         if copy and not copy.deleted and copy.leader ~= ns.FullName("player") then
             return copy, "guild"
         end
@@ -145,12 +147,12 @@ function Session:GetViewed()
 end
 
 function Session:SetViewed(id)
-    ns.db.viewSessionId = id
+    ns.char.viewSessionId = id
     ns:Fire("SESSION_CHANGED")
 end
 
 function Session:GetActiveID()
-    return ns.db and ns.db.activeSessionId
+    return ns.char and ns.char.activeSessionId
 end
 
 -- true, wenn die aktuelle Sitzung von diesem Spieler angelegt wurde (Master-Liste).
@@ -200,7 +202,7 @@ end
 function Session:New(leader)
     local s = newSession(leader)
     ownSessions()[s.id] = s
-    ns.db.activeSessionId = s.id
+    ns.char.activeSessionId = s.id
     changed("Neue Sitzung", s.id)
     Session:Touch(s)
     ns:Fire("SESSION_RULES_CHANGED")
@@ -209,8 +211,8 @@ end
 
 -- Eigene Sitzung aktivieren: sie wird ab jetzt an die Gruppe verteilt
 function Session:SetActive(id)
-    if not ownSessions()[id] or ns.db.activeSessionId == id then return false end
-    ns.db.activeSessionId = id
+    if not ownSessions()[id] or ns.char.activeSessionId == id then return false end
+    ns.char.activeSessionId = id
     changed("Aktive Sitzung", id)
     ns:Fire("SESSION_FULL_SYNC")
     return true
@@ -221,7 +223,7 @@ function Session:Reset()
     local s = ownActive()
     if not s then return end
     ownSessions()[s.id] = nil
-    ns.db.activeSessionId = nil
+    ns.char.activeSessionId = nil
     changed("Sitzung verworfen", s.id)
     ns:Fire("OWN_SESSION_DELETED", s)
     ns:Fire("SESSION_ENDED", s.id)
@@ -264,7 +266,7 @@ function Session:TakeOver(leader)
     s.name = old.name or autoName(s)
     s.nameAuto = old.name == nil
     ownSessions()[s.id] = s
-    ns.db.activeSessionId = s.id
+    ns.char.activeSessionId = s.id
     changed("Sitzung übernommen von", old.leader)
     Session:Touch(s)
     ns:Fire("SESSION_FULL_SYNC")
@@ -322,7 +324,7 @@ function Session:Continue()
     s.name = (old.name or autoName(old)) .. " (Fortsetzung)"
     s.nameAuto = false
     ownSessions()[s.id] = s
-    ns.db.activeSessionId = s.id
+    ns.char.activeSessionId = s.id
     changed("Sitzung fortgeführt", old.id, "->", s.id)
     Session:Touch(s)
     ns:Fire("SESSION_RULES_CHANGED")
@@ -414,7 +416,7 @@ local function scheduleDeadlines()
         consider(s)
     end
     consider(Session:GetRemote())
-    for _, s in pairs(ns.db and ns.db.guildSessions or {}) do
+    for _, s in pairs(ns.char and ns.char.guildSessions or {}) do
         consider(s)
     end
     -- nicht mehr benötigte oder geänderte Timer abbrechen
@@ -446,13 +448,57 @@ function Session:MigrateSingleSession()
         old.name = old.name or autoName(old)
         old.nameAuto = old.nameAuto ~= false
         ownSessions()[old.id] = old
-        ns.db.activeSessionId = old.id
+        ns.char.activeSessionId = old.id
         ns.Debug("Session", "Migration: eigene Sitzung übernommen", old.id)
     else
-        ns.db.remoteSession = old
+        ns.char.remoteSession = old
         ns.Debug("Session", "Migration: Spiegel übernommen", old.id)
     end
     changed("Migration abgeschlossen")
+end
+
+-- Umstellung account-weiter Sitzungsdaten (PaenikSoftResDB) auf pro Charakter (PaenikSoftResCharDB).
+-- Eigene Sitzungen gehen an den Charakter, der sie angelegt hat (leader); die anderen bleiben liegen, bis
+-- ihr Charakter sich einloggt. Spiegel, Gildenkopien und weitergereichte Anmeldungen bekommt der erste
+-- Charakter (sie werden ohnehin neu synchronisiert). Eigene Anmeldungen (signups) lassen sich keinem
+-- Charakter zuordnen und werden verworfen – sonst gingen sie unter falschem Namen an den Raidlead.
+function Session:MigrateToCharacter()
+    local db, char = ns.db, ns.char
+    if not db or not char then return end
+    local me = ns.FullName("player")
+    local moved = 0
+    if db.sessions then
+        for id, s in pairs(db.sessions) do
+            if s.leader == me then
+                ownSessions()[id] = s
+                db.sessions[id] = nil
+                moved = moved + 1
+                if db.activeSessionId == id then
+                    char.activeSessionId = id
+                    db.activeSessionId = nil
+                end
+            end
+        end
+        if next(db.sessions) == nil then
+            db.sessions = nil
+            db.activeSessionId = nil
+        end
+    end
+    for _, key in ipairs({ "remoteSession", "viewSessionId", "relaySignups", "guildSessions" }) do
+        if db[key] ~= nil then
+            if char[key] == nil then
+                char[key] = db[key]
+            end
+            db[key] = nil
+        end
+    end
+    if db.signups then
+        ns.Debug("Session", "Migration: account-weite Anmeldungen verworfen")
+        db.signups = nil
+    end
+    if moved > 0 then
+        changed("Migration: Sitzungen für diesen Charakter übernommen", moved)
+    end
 end
 
 -- Die folgenden Funktionen arbeiten auf der Sitzung s; ohne s auf der aktuellen (Session:Get()).
@@ -779,7 +825,7 @@ function Session:ApplyRemoteSession(info)
     local s = self:GetRemote()
     if not s or s.id ~= info.id then
         s = { id = info.id, reserves = {} }
-        ns.db.remoteSession = s
+        ns.char.remoteSession = s
     elseif info.instanceKey ~= s.instanceKey then
         wipe(s.reserves)
     end
@@ -834,7 +880,7 @@ end
 function Session:ApplyRemoteEnd(sessionID)
     local s = self:GetRemote()
     if s and s.id == sessionID then
-        ns.db.remoteSession = nil
+        ns.char.remoteSession = nil
         changed("Sitzung vom Raidlead beendet", sessionID)
     end
 end

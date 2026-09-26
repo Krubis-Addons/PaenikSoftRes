@@ -8,6 +8,8 @@ local ROW_HEIGHT = 26
 local BOSS_ROW_HEIGHT = 40
 local SIDEBAR_WIDTH = 190
 local ALL_BOSSES = 0
+local WISHLIST = -1 -- Eintrag „Wunschliste“ in der Bossliste
+local WISHLIST_FALLBACK_ICON = "Interface\\Icons\\INV_Misc_Note_01"
 local ALL_BOSSES_ICON = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull"
 local PORTRAIT_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local OWNED_TEXT = "|cff66ccffIm Besitz|r"
@@ -206,6 +208,10 @@ local function initBossRow(row, data)
         row.mask:SetAllPoints(row.portrait)
         row.mask:SetTexture(PORTRAIT_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
         row.portrait:AddMaskTexture(row.mask)
+        -- Wunschliste: Stern ohne runde Maske (die würde ihn beschneiden), mittig im Porträtbereich
+        row.star = row:CreateTexture(nil, "ARTWORK")
+        row.star:SetSize(24, 24)
+        row.star:SetPoint("CENTER", row.portrait, "CENTER")
         row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         row.name:SetPoint("TOPLEFT", row.portrait, "TOPRIGHT", 6, -3)
         row.name:SetPoint("RIGHT", row, "RIGHT", -4, 0)
@@ -218,6 +224,12 @@ local function initBossRow(row, data)
         row:SetScript("OnClick", onBossClick)
     end
     row.bossIndex = data.index
+    local isWishlist = data.index == WISHLIST
+    row.portrait:SetShown(not isWishlist)
+    row.star:SetShown(isWishlist)
+    if isWishlist and not ns.Wishlist.SetIconTexture(row.star) then
+        row.star:SetTexture(WISHLIST_FALLBACK_ICON)
+    end
     if data.displayID then
         SetPortraitTextureFromCreatureDisplayID(row.portrait, data.displayID)
     else
@@ -225,11 +237,17 @@ local function initBossRow(row, data)
     end
     row.portrait:SetDesaturated(data.killed == true)
     row.name:SetText(data.killed and ("|cff808080" .. data.name .. "|r") or data.name)
+    local info = {}
     if data.killed then
-        row.info:SetText("|cff808080gelegt|r" .. (data.mine > 0 and ("  |cff40ff40" .. data.mine .. " reserviert|r") or ""))
-    else
-        row.info:SetText(data.mine > 0 and ("|cff40ff40" .. data.mine .. " reserviert|r") or "")
+        table.insert(info, "|cff808080gelegt|r")
     end
+    if data.mine > 0 then
+        table.insert(info, "|cff40ff40" .. data.mine .. " reserviert|r")
+    end
+    if (data.wished or 0) > 0 then
+        table.insert(info, ns.Wishlist.Icon(10) .. "|cffffd100" .. data.wished .. "|r")
+    end
+    row.info:SetText(table.concat(info, "  "))
     if data.index == selectedBoss then
         row.bg:SetColorTexture(1, 0.82, 0, 0.18)
         row.name:SetFontObject("GameFontHighlight")
@@ -348,14 +366,19 @@ end
 
 local lootHeader = UI.CreateText(content, nil, nil, "GameFontNormal")
 
--- Raidlead: Rechtsklick auf ein Item der eigenen Sitzung → Hard Reserve setzen/entfernen
+-- Rechtsklick auf ein Item: Wunschliste (alle); Raidlead der eigenen Sitzung zusätzlich Hard Reserve
 local function showItemMenu(row)
     local s = ns.Session:GetViewed()
-    if not s or s.leader ~= ns.FullName("player") then return end
+    if not s then return end
     local itemID = row.itemID
+    local isOwner = s.leader == ns.FullName("player")
     local hr = ns.Session:GetHardReserve(itemID, s)
     MenuUtil.CreateContextMenu(row, function(_, root)
-        root:CreateTitle(UI.StripColors(row.name:GetText() or ""))
+        root:CreateTitle(UI.StripColors(select(1, UI.GetItemDisplay(itemID)) or ""))
+        root:CreateButton(ns.Wishlist:Has(itemID) and "Von der Wunschliste entfernen" or "Auf die Wunschliste",
+            function() ns.Wishlist:Toggle(itemID) end)
+        if not isOwner then return end
+        root:CreateDivider()
         root:CreateButton(hr and "Hard Reserve ändern…" or "Hard Reserve setzen…", function()
             UI.Prompt("Hard Reserve für wen?\n|cff999999Name oder Notiz, z. B. „Gildenbank“|r", hr and hr.note or "",
                 function(note)
@@ -377,6 +400,10 @@ local function onItemClick(row, mouseButton)
     if not row.itemID then return end
     if mouseButton == "RightButton" then
         showItemMenu(row)
+        return
+    end
+    if IsAltKeyDown() then
+        ns.Wishlist:Toggle(row.itemID)
         return
     end
     if row.hardReserve then
@@ -404,6 +431,8 @@ local function onItemEnter(row)
             table.insert(hint, "Shift-Klick: ein weiteres Mal reservieren")
         end
     end
+    table.insert(hint, ns.Wishlist:Has(row.itemID) and "Alt-Klick: von der Wunschliste entfernen"
+        or "Alt-Klick: auf die Wunschliste")
     showItemTooltip(row, row.itemID, hint)
 end
 
@@ -437,7 +466,8 @@ local function initItemRow(row, data)
     local name, icon = UI.GetItemDisplay(data.itemID, onItemLoaded)
     row.icon:SetTexture(icon)
     row.icon:SetDesaturated(data.killed == true)
-    row.name:SetText(data.killed and ("|cff808080" .. UI.StripColors(name) .. "|r") or name)
+    name = data.killed and ("|cff808080" .. UI.StripColors(name) .. "|r") or name
+    row.name:SetText(data.wished and (ns.Wishlist.Icon() .. " " .. name) or name)
 
     local info = {}
     if data.hardReserve then
@@ -456,7 +486,7 @@ local function initItemRow(row, data)
     if data.others > 0 then
         table.insert(info, data.others .. " SR")
     end
-    if selectedBoss == ALL_BOSSES and data.boss then
+    if (selectedBoss == ALL_BOSSES or selectedBoss == WISHLIST) and data.boss then
         table.insert(info, "|cff999999" .. data.boss .. "|r")
     end
     row.info:SetText(table.concat(info, "  "))
@@ -464,6 +494,8 @@ local function initItemRow(row, data)
         row.bg:SetColorTexture(0.6, 0.1, 0.1, 0.25)
     elseif data.mine > 0 then
         row.bg:SetColorTexture(0.1, 0.6, 0.1, 0.25)
+    elseif data.wished then
+        row.bg:SetColorTexture(1, 0.82, 0, 0.1)
     else
         row.bg:SetColorTexture(0, 0, 0, 0)
     end
@@ -487,8 +519,18 @@ local function buildBossElements(s, mineCount)
     for _, count in pairs(mineCount) do
         total = total + count
     end
-    local elements = { { index = ALL_BOSSES, name = "Alle Bosse", mine = total } }
-    for index, encounter in ipairs(ns.LootData:GetDisplayEncounters(s.instanceKey)) do
+    local encounters = ns.LootData:GetDisplayEncounters(s.instanceKey)
+    local allItems = {}
+    for _, encounter in ipairs(encounters) do
+        for _, itemID in ipairs(encounter.items) do
+            table.insert(allItems, itemID)
+        end
+    end
+    local elements = {
+        { index = WISHLIST, name = "Wunschliste", mine = 0, wished = ns.Wishlist:CountIn(allItems) },
+        { index = ALL_BOSSES, name = "Alle Bosse", mine = total },
+    }
+    for index, encounter in ipairs(encounters) do
         local mine = 0
         local counted = {}
         for _, itemID in ipairs(encounter.items) do
@@ -502,6 +544,7 @@ local function buildBossElements(s, mineCount)
             name = encounter.name,
             displayID = encounter.displayID,
             mine = mine,
+            wished = ns.Wishlist:CountIn(encounter.items),
             killed = ns.Session:IsBossKilled(s, index),
         })
     end
@@ -522,12 +565,12 @@ local function buildItemElements(s, mineCount)
     local killedOnly = ns.Session:GetKilledOnlyItems(s)
     local elements, index = {}, {}
     for bossIndex, encounter in ipairs(ns.LootData:GetDisplayEncounters(s.instanceKey)) do
-        if selectedBoss == ALL_BOSSES or selectedBoss == bossIndex then
+        if selectedBoss == ALL_BOSSES or selectedBoss == WISHLIST or selectedBoss == bossIndex then
             for _, itemID in ipairs(encounter.items) do
                 local existing = index[itemID]
                 if existing then
                     existing.boss = "mehrere Bosse"
-                else
+                elseif selectedBoss ~= WISHLIST or ns.Wishlist:Has(itemID) then
                     local element = {
                         itemID = itemID,
                         boss = encounter.name,
@@ -536,6 +579,7 @@ local function buildItemElements(s, mineCount)
                         killed = killedOnly[itemID] == true,
                         hardReserve = ns.Session:GetHardReserve(itemID, s),
                         owned = ns.Owned:Has(itemID),
+                        wished = ns.Wishlist:Has(itemID),
                     }
                     index[itemID] = element
                     table.insert(elements, element)
@@ -586,8 +630,13 @@ function refreshList()
     local shownRows = refreshMyReserves(s, kind)
     lootHeader:ClearAllPoints()
     lootHeader:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -18 - shownRows * ROW_HEIGHT - 12)
-    lootHeader:SetText(selectedBoss == ALL_BOSSES and "Loot aller Bosse"
-        or ("Loot von " .. encounters[selectedBoss].name))
+    if selectedBoss == WISHLIST then
+        lootHeader:SetText("Deine Wunschliste |cff999999(Alt-Klick oder Rechtsklick auf ein Item zum Hinzufügen)|r")
+    elseif selectedBoss == ALL_BOSSES then
+        lootHeader:SetText("Loot aller Bosse")
+    else
+        lootHeader:SetText("Loot von " .. encounters[selectedBoss].name)
+    end
     itemList:ClearAllPoints()
     itemList:SetPoint("TOPLEFT", lootHeader, "BOTTOMLEFT", 0, -6)
     itemList:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -20, 0)
@@ -615,4 +664,5 @@ end)
 ns:On("SESSION_CHANGED", refreshIfShown)
 ns:On("LOOT_ITEMS_CHANGED", refreshIfShown)
 ns:On("OWNED_CHANGED", refreshIfShown)
+ns:On("WISHLIST_CHANGED", refreshIfShown)
 ns:On("ROLE_CHANGED", refreshIfShown)

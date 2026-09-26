@@ -332,6 +332,11 @@ local function addHistory(itemID, winner, roll, category, lootKey)
         time = GetServerTime(),
         lootKey = lootKey,
     })
+    -- Selbst gewonnen: Item von der eigenen Wunschliste nehmen
+    if winner == ns.FullName("player") and ns.Wishlist:Has(itemID) then
+        ns.Wishlist:Set(itemID, false)
+        ns.Print(itemLink(itemID) .. " gewonnen – von der Wunschliste entfernt.")
+    end
     ns:Fire("SESSION_CHANGED")
 end
 

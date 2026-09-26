@@ -46,13 +46,13 @@ local function enabled()
 end
 
 local function copies()
-    ns.db.guildSessions = ns.db.guildSessions or {}
-    return ns.db.guildSessions
+    ns.char.guildSessions = ns.char.guildSessions or {}
+    return ns.char.guildSessions
 end
 
 local function signups()
-    ns.db.signups = ns.db.signups or {}
-    return ns.db.signups
+    ns.char.signups = ns.char.signups or {}
+    return ns.char.signups
 end
 
 local function me()
@@ -60,7 +60,7 @@ local function me()
 end
 
 local function ownSession(sid)
-    return ns.db.sessions and ns.db.sessions[sid or ""]
+    return ns.char.sessions and ns.char.sessions[sid or ""]
 end
 
 local function sameItems(a, b)
@@ -444,13 +444,13 @@ Comm:RegisterHandler("GQ", function(sender)
     if not enabled() then return end
     markSeen(sender)
     -- eigene veröffentlichte Sitzungen (gedrosselt, falls viele Mitglieder kurz hintereinander einloggen)
-    for _, s in pairs(ns.db.sessions or {}) do
+    for _, s in pairs(ns.char.sessions or {}) do
         if s.published and not (lastPublished[s.id] and GetTime() - lastPublished[s.id] < REPUBLISH_MIN) then
             schedulePublish(s, 0.5 + math.random())
         end
     end
     -- Fragt ein Raidlead nach, für den wir Anmeldungen anderer bereithalten: weiterreichen
-    for sid, bySession in pairs(ns.db.relaySignups or {}) do
+    for sid, bySession in pairs(ns.char.relaySignups or {}) do
         local copy = copies()[sid]
         if copy and copy.leader == sender and next(bySession) then
             GuildSync:RelayTo(sender)
@@ -534,8 +534,8 @@ end)
 -- db.relaySignups[sid][Spieler] = { items, signedAt }: fremde, noch offene Anmeldungen, die dieses Addon
 -- an den Raidlead weiterreicht, sobald er online ist (auch wenn der Raider selbst offline ist).
 local function relays()
-    ns.db.relaySignups = ns.db.relaySignups or {}
-    return ns.db.relaySignups
+    ns.char.relaySignups = ns.char.relaySignups or {}
+    return ns.char.relaySignups
 end
 
 local heardRelay = {} -- ["sid|Spieler|signedAt"] = GetTime(): im Kanal gehört → nicht doppelt senden
@@ -706,7 +706,7 @@ local function initialSync()
     C_Timer.After(2 + math.random() * 3, function()
         if not enabled() then return end
         Comm:SendGuild("GQ")
-        for _, s in pairs(ns.db.sessions or {}) do
+        for _, s in pairs(ns.char.sessions or {}) do
             if s.published then
                 schedulePublish(s, 1)
             end
