@@ -5,8 +5,8 @@ local _, ns = ...
 local UI = {}
 ns.UI = UI
 
--- Lootbeutel-Icon (Kleiner brauner Beutel), Fallback falls das Item im Client fehlt
-UI.ICON = C_Item.GetItemIconByID(4496) or "Interface\\Icons\\INV_Misc_Bag_08"
+-- Addon-Icon: der Loot-Mauszeiger (Sack), der beim Überfahren einer lootbaren Leiche erscheint
+UI.ICON = "Interface\\Cursor\\LootAll"
 
 UI.TAB_RAIDER = 1
 UI.TAB_LEAD = 2
@@ -25,6 +25,18 @@ mainFrame:SetScript("OnDragStop", mainFrame.StopMovingOrSizing)
 mainFrame:SetClampedToScreen(true)
 mainFrame.TitleContainer.TitleText:SetText(ns.TITLE)
 mainFrame:SetPortraitToAsset(UI.ICON)
+
+-- Dunkler, runder Hintergrund hinter dem Porträt (das Icon ist teilweise transparent)
+do
+    local container = mainFrame.PortraitContainer
+    local portrait = mainFrame:GetPortrait()
+    local portraitBg = container:CreateTexture(nil, "OVERLAY", nil, -1)
+    portraitBg:SetAllPoints(portrait)
+    portraitBg:SetColorTexture(0.05, 0.05, 0.05, 1)
+    if container.CircleMask then
+        portraitBg:AddMaskTexture(container.CircleMask)
+    end
+end
 mainFrame.CloseButton:SetScript("OnClick", function()
     mainFrame:Hide()
 end)
