@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: PaenikSoftRes
+## Notes: Beschreibung deines Addons
+## Author: Dein Name
+## Version: @project-version@
+## SavedVariables: PaenikSoftResDB, PaenikSoftResDebugLog
+
+Debug.lua
+Core.lua
