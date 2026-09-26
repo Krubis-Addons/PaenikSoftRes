@@ -29,7 +29,10 @@ Es gibt ein Oberfläche beim Looten mit den Soft Reserve Informationen pro Item.
 - Roadmap und Status der Iterationen: `ROADMAP.md`
 - Datenmodell: `ns.db.session` (siehe Kopfkommentar in `Session.lua`). Spielerschlüssel immer `Name-Realm` über `ns.FullName(unit)`.
 - Interne Ereignisse über `ns:On(name, fn)` / `ns:Fire(name, ...)`: `DB_READY`, `LOGIN`, `SESSION_CHANGED`, `ROLE_CHANGED`.
-- Rolle (`ns.Roles:IsLead()`): `db.forceRole` (Slash `lead|raider|auto`) > solo = Raidlead > Gruppenleiter > Assistent, der `session.leader` ist.
-- Loot-Daten über Provider (`Data/LootData.lua`): EJ-Provider (in der Beta per `EncounterJournalDisabled=1` leer) + eigene Tabellen in `Data/Instances/` (ItemIDs aus AtlasLootClassic). Instanzen heißen `providerID:key` (z. B. `static:mc`). Sync über Addon-Messages, Präfix `PSR` (reserviert, der Raidlead hält die Master-Liste).
+- Rolle (`ns.Roles:IsLead()`): `db.forceRole` (Slash `lead|raider|auto`) > solo = Raidlead > in der Gruppe nur der Gruppenleiter. Maßgebliche Master-Liste nur bei `Session:IsMaster()` (Besitzer + Raidlead); ein neuer Gruppenleiter kann eine fremde Sitzung übernehmen (`Session:TakeOver`).
+- Loot-Daten über Provider (`Data/LootData.lua`): EJ-Provider (in der Beta per `EncounterJournalDisabled=1` leer) + eigene Tabellen in `Data/Instances/` (ItemIDs aus AtlasLootClassic). Instanzen heißen `providerID:key` (z. B. `static:mc`). Sync über Addon-Messages, Präfix `PSR`, Protokoll im Kopf von `Comm.lua`. Regeln (`R`) nur vom Gruppenleiter annehmen; voller Stand = `R` + `F` + `P`-Chunks.
+- Spielernamen: `ns.FullName` nutzt `UnitName` + `GetNormalizedRealmName`, nicht `UnitFullName` (Forever-Namen können Leerzeichen enthalten, z. B. „Krubi Bambubi“; UnitFullName trennt dann falsch). Format muss dem Absender von CHAT_MSG_ADDON entsprechen.
 - Nicht dokumentierte Globals (z. B. `EJ_*`, `GetLootSlotLink`, `IsInGroup`) vor der Nutzung mit `/paeniksoftres probe` ingame prüfen.
 - SavedVariables: laut forever-addon-kit wurden sie in der Beta nie geladen. Am 2026-09-26 war die Sitzung nach dem Neustart aber vorhanden (Log: „Sitzung vorhanden: true“), das Laden funktioniert also inzwischen. Kein Workaround nötig.
+- Minimap-Button ohne Bibliothek (`UI/MinimapButton.lua`), Position in `db.minimap.angle`; Icon `ns.UI.ICON` (Kleiner brauner Beutel, ItemID 4496) auch als Fensterporträt.
+- Testhilfe: `/paeniksoftres fake` trägt 5 Testspieler ein (nur ohne Gruppe, `source = "fake"`, wird nie gesendet).

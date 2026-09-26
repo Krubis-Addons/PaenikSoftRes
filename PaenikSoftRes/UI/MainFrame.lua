@@ -1,15 +1,19 @@
--- Hauptfenster mit den Tabs "Raider" und "Raidlead".
--- Der Inhalt des Raidlead-Tabs liegt in UI/LeadPanel.lua.
+-- Hauptfenster mit den Tabs "Raider", "Raidlead" und "Übersicht".
+-- Inhalte: UI/RaiderPanel.lua, UI/LeadPanel.lua, UI/OverviewPanel.lua
 local addonName, ns = ...
 
 local UI = {}
 ns.UI = UI
 
+-- Lootbeutel-Icon (Kleiner brauner Beutel), Fallback falls das Item im Client fehlt
+UI.ICON = C_Item.GetItemIconByID(4496) or "Interface\\Icons\\INV_Misc_Bag_08"
+
 UI.TAB_RAIDER = 1
 UI.TAB_LEAD = 2
+UI.TAB_OVERVIEW = 3
 
 local mainFrame = CreateFrame("Frame", nil, UIParent, "PortraitFrameTemplate")
-mainFrame:SetSize(500, 420)
+mainFrame:SetSize(760, 540)
 mainFrame:SetPoint("CENTER")
 mainFrame:SetFrameStrata("HIGH")
 mainFrame:SetToplevel(true)
@@ -20,11 +24,16 @@ mainFrame:SetScript("OnDragStart", mainFrame.StartMoving)
 mainFrame:SetScript("OnDragStop", mainFrame.StopMovingOrSizing)
 mainFrame:SetClampedToScreen(true)
 mainFrame.TitleContainer.TitleText:SetText(addonName)
+mainFrame:SetPortraitToAsset(UI.ICON)
 mainFrame.CloseButton:SetScript("OnClick", function()
     mainFrame:Hide()
 end)
 mainFrame:Hide()
 ns.mainFrame = mainFrame
+
+function ns.ToggleMainFrame()
+    mainFrame:SetShown(not mainFrame:IsShown())
+end
 
 -- Inhaltsbereiche pro Tab
 local function createPanel()
@@ -38,6 +47,7 @@ end
 local panels = {
     [UI.TAB_RAIDER] = createPanel(),
     [UI.TAB_LEAD] = createPanel(),
+    [UI.TAB_OVERVIEW] = createPanel(),
 }
 
 function UI.GetPanel(tabID)
@@ -63,33 +73,59 @@ function UI.CreateButton(parent, text, width, onClick)
     return button
 end
 
--- Raider-Tab: Statusblock (die Auswahl folgt in Iteration 4)
-local raiderPanel = panels[UI.TAB_RAIDER]
-local raiderStatus = {}
-raiderStatus.header = UI.CreateText(raiderPanel, nil, nil, "GameFontNormalLarge")
-raiderStatus.header:SetText("Meine Soft Reserves")
-raiderStatus.role = UI.CreateText(raiderPanel, raiderStatus.header, -10)
-raiderStatus.session = UI.CreateText(raiderPanel, raiderStatus.role)
-raiderStatus.instance = UI.CreateText(raiderPanel, raiderStatus.session)
-raiderStatus.rules = UI.CreateText(raiderPanel, raiderStatus.instance)
-raiderStatus.own = UI.CreateText(raiderPanel, raiderStatus.rules)
+-- Scrollbare Liste; initializer(row, elementData) füllt eine (wiederverwendete) Zeile.
+function UI.CreateScrollList(parent, rowHeight, initializer)
+    local scrollBox = CreateFrame("Frame", nil, parent, "WowScrollBoxList")
+    local scrollBar = CreateFrame("EventFrame", nil, parent, "MinimalScrollBar")
+    scrollBar:SetPoint("TOPLEFT", scrollBox, "TOPRIGHT", 6, 0)
+    scrollBar:SetPoint("BOTTOMLEFT", scrollBox, "BOTTOMRIGHT", 6, 0)
+    local view = CreateScrollBoxListLinearView()
+    view:SetElementExtent(rowHeight)
+    view:SetElementInitializer("Button", initializer)
+    ScrollUtil.InitScrollBoxListWithScrollBar(scrollBox, scrollBar, view)
+    return scrollBox
+end
 
-local function refreshRaiderStatus()
-    local s = ns.Session:Get()
-    raiderStatus.role:SetText("Rolle: " .. ns.Roles:GetRoleName())
-    if not s then
-        raiderStatus.session:SetText("Sitzung: keine")
-        raiderStatus.instance:SetText("")
-        raiderStatus.rules:SetText("")
-        raiderStatus.own:SetText("")
-        return
+-- Anzeige eines Items: farbiger Name + Icon. Lädt fehlende Item-Daten nach
+-- und ruft dann onLoaded auf (entprellt pro Aufrufer).
+function UI.GetItemDisplay(itemID, onLoaded)
+    if not C_Item.DoesItemExistByID(itemID) then
+        return "|cffff4040Item " .. itemID .. " (unbekannt)|r", 134400 -- Fragezeichen-Icon
     end
-    raiderStatus.session:SetText("Sitzung: " .. (s.leader or "?") .. (s.locked and " (gesperrt)" or " (offen)"))
-    raiderStatus.instance:SetText("Instanz: " .. (s.instanceName or "nicht gewählt"))
-    raiderStatus.rules:SetText(string.format("Max. SRs pro Spieler: %d, doppelte Items: %s",
-        s.maxReserves, s.allowDuplicates and "ja" or "nein"))
-    raiderStatus.own:SetText(string.format("Eigene Reserves: %d / %d",
-        ns.Session:CountReserves(ns.FullName("player")), s.maxReserves))
+    local _, _, _, _, icon = C_Item.GetItemInfoInstant(itemID)
+    local name = C_Item.GetItemNameByID(itemID)
+    if not name then
+        if onLoaded then
+            Item:CreateFromItemID(itemID):ContinueOnItemLoad(onLoaded)
+        end
+        return "|cff808080Item " .. itemID .. "|r", icon
+    end
+    local quality = C_Item.GetItemQualityByID(itemID)
+    local _, _, _, hex = C_Item.GetItemQualityColor(quality or 1)
+    return "|c" .. (hex or "ffffffff") .. name .. "|r", icon
+end
+
+-- Führt fn höchstens einmal pro Frame-Tick aus (für Nachlade-Callbacks).
+function UI.Debounce(fn, delay)
+    local scheduled = false
+    return function()
+        if scheduled then return end
+        scheduled = true
+        C_Timer.After(delay or 0.1, function()
+            scheduled = false
+            fn()
+        end)
+    end
+end
+
+-- Kurzname ohne eigenen Realm
+function UI.ShortName(fullName)
+    local realm = GetNormalizedRealmName()
+    if realm then
+        local short = fullName:match("^(.-)%-" .. realm:gsub("%p", "%%%0") .. "$")
+        if short then return short end
+    end
+    return fullName
 end
 
 -- Tabs
@@ -114,7 +150,8 @@ end
 local raiderTab = createTab(UI.TAB_RAIDER, "Raider")
 raiderTab:SetPoint("TOPLEFT", mainFrame, "BOTTOMLEFT", 12, 2)
 createTab(UI.TAB_LEAD, "Raidlead")
-PanelTemplates_SetNumTabs(mainFrame, 2)
+createTab(UI.TAB_OVERVIEW, "Übersicht")
+PanelTemplates_SetNumTabs(mainFrame, 3)
 selectTab(UI.TAB_RAIDER)
 
 local function refresh()
@@ -123,10 +160,8 @@ local function refresh()
     if not isLead and mainFrame.selectedTab == UI.TAB_LEAD then
         selectTab(UI.TAB_RAIDER)
     end
-    refreshRaiderStatus()
 end
 
 mainFrame:HookScript("OnShow", refresh)
-ns:On("SESSION_CHANGED", refresh)
 ns:On("ROLE_CHANGED", refresh)
 ns:On("DB_READY", refresh)

@@ -16,6 +16,12 @@ local newButton = UI.CreateButton(panel, "Neue Sitzung", 140, function()
 end)
 newButton:SetPoint("TOPLEFT", sessionText, "BOTTOMLEFT", 0, -16)
 
+-- Fremde Sitzung (z. B. nach Übergabe der Gruppenleitung): übernehmen inkl. Reserves
+local takeOverButton = UI.CreateButton(panel, "Sitzung übernehmen", 160, function()
+    ns.Session:TakeOver(ns.FullName("player"))
+end)
+takeOverButton:SetPoint("LEFT", newButton, "RIGHT", 8, 0)
+
 -- Mit Sitzung: Regeln
 local rules = CreateFrame("Frame", nil, panel)
 rules:SetPoint("TOPLEFT", sessionText, "BOTTOMLEFT", 0, -16)
@@ -123,10 +129,18 @@ resetButton:SetPoint("LEFT", restartButton, "RIGHT", 8, 0)
 
 local function refresh()
     local s = ns.Session:Get()
-    newButton:SetShown(s == nil)
-    rules:SetShown(s ~= nil)
+    local isOwner = ns.Session:IsOwner()
+    newButton:SetShown(not isOwner)
+    takeOverButton:SetShown(s ~= nil and not isOwner)
+    rules:SetShown(isOwner)
     if not s then
         sessionText:SetText("Keine Sitzung. Lege eine neue Sitzung an, um die Regeln festzulegen.")
+        return
+    end
+    if not isOwner then
+        sessionText:SetText(string.format(
+            "Die aktuelle Sitzung gehört %s.\nÜbernimm sie mit allen Reserves oder lege eine neue an.",
+            UI.ShortName(s.leader or "?")))
         return
     end
 

@@ -1,4 +1,4 @@
--- Molten Core (Classic). ItemIDs aus AtlasLootClassic (data.lua), per Skript übernommen.
+-- Molten Core (Classic). ItemIDs, npcIDs und DisplayIDs aus AtlasLootClassic (data.lua), per Skript übernommen.
 local _, ns = ...
 
 ns.LootData:RegisterStaticInstance({
@@ -10,6 +10,8 @@ ns.LootData:RegisterStaticInstance({
     encounters = {
         {
             name = "Lucifron",
+            npcID = 12118,
+            displayID = 13031,
             items = {
                 16800, -- Arcanist Boots
                 16805, -- Felheart Gloves
@@ -33,6 +35,8 @@ ns.LootData:RegisterStaticInstance({
         },
         {
             name = "Magmadar",
+            npcID = 11982,
+            displayID = 10193,
             items = {
                 16814, -- Pants of Prophecy
                 16796, -- Arcanist Leggings
@@ -62,6 +66,8 @@ ns.LootData:RegisterStaticInstance({
         },
         {
             name = "Gehennas",
+            npcID = 12259,
+            displayID = 13030,
             items = {
                 16812, -- Gloves of Prophecy
                 16826, -- Nightslayer Gloves
@@ -83,6 +89,8 @@ ns.LootData:RegisterStaticInstance({
         },
         {
             name = "Garr",
+            npcID = 12057,
+            displayID = 12110,
             items = {
                 18564, -- Bindings of the Windseeker
                 16813, -- Circlet of Prophecy
@@ -113,6 +121,8 @@ ns.LootData:RegisterStaticInstance({
         },
         {
             name = "Shazzrah",
+            npcID = 12264,
+            displayID = 13032,
             items = {
                 16811, -- Boots of Prophecy
                 16801, -- Arcanist Gloves
@@ -134,6 +144,8 @@ ns.LootData:RegisterStaticInstance({
         },
         {
             name = "Baron Geddon",
+            npcID = 12056,
+            displayID = 12129,
             items = {
                 18563, -- Bindings of the Windseeker
                 16797, -- Arcanist Mantle
@@ -157,6 +169,8 @@ ns.LootData:RegisterStaticInstance({
         },
         {
             name = "Golemagg the Incinerator",
+            npcID = 11988,
+            displayID = 11986,
             items = {
                 16815, -- Robes of Prophecy
                 16798, -- Arcanist Robes
@@ -186,6 +200,8 @@ ns.LootData:RegisterStaticInstance({
         },
         {
             name = "Sulfuron Harbinger",
+            npcID = 12098,
+            displayID = 13030,
             items = {
                 16816, -- Mantle of Prophecy
                 16823, -- Nightslayer Shoulder Pads
@@ -206,6 +222,8 @@ ns.LootData:RegisterStaticInstance({
         },
         {
             name = "Majordomo Executus",
+            npcID = 12018,
+            displayID = 12029,
             items = {
                 19139, -- Fireguard Shoulders
                 18810, -- Wild Growth Spaulders
@@ -223,6 +241,8 @@ ns.LootData:RegisterStaticInstance({
         },
         {
             name = "Ragnaros",
+            npcID = 11502,
+            displayID = 11121,
             items = {
                 17204, -- Eye of Sulfuras
                 19017, -- Essence of the Firelord

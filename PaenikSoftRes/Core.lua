@@ -43,10 +43,18 @@ function ns:Fire(name, ...)
     end
 end
 
--- Spielerschlüssel immer als "Name-Realm"
+function ns.Print(msg)
+    print("|cff33ff99" .. addonName .. "|r: " .. tostring(msg))
+end
+
+-- Spielerschlüssel immer als "Name-Realm", im selben Format wie der Absender von CHAT_MSG_ADDON.
+-- Nicht UnitFullName: In Forever können Namen Leerzeichen enthalten ("Krubi Bambubi"),
+-- und UnitFullName liefert dann "Krubi" + "Bambubi" statt Name + Realm.
 function ns.FullName(unit)
-    local name, realm = UnitFullName(unit or "player")
-    if not name then return nil end
+    local name, realm = UnitName(unit or "player")
+    if not name or (issecretvalue and (issecretvalue(name) or issecretvalue(realm))) then
+        return nil
+    end
     if not realm or realm == "" then
         realm = GetNormalizedRealmName()
     end
@@ -71,7 +79,27 @@ function ns:ADDON_LOADED(name)
     ns:Fire("DB_READY")
 end
 
+-- Migration: Schlüssel aus der Zeit mit UnitFullName ("Krubi-Bambubi") auf das neue Format umstellen.
+local function migratePlayerKeys()
+    local s = ns.db.session
+    local oldName, oldRealm = UnitFullName("player")
+    local me = ns.FullName("player")
+    if not s or not oldName or not me then return end
+    local oldKey = oldName .. "-" .. (oldRealm and oldRealm ~= "" and oldRealm or GetNormalizedRealmName() or "")
+    if oldKey == me then return end
+    if s.leader == oldKey then
+        s.leader = me
+        ns.Debug("Core", "Migration: Sitzungsleiter", oldKey, "->", me)
+    end
+    if s.reserves and s.reserves[oldKey] and not s.reserves[me] then
+        s.reserves[me] = s.reserves[oldKey]
+        s.reserves[oldKey] = nil
+        ns.Debug("Core", "Migration: Reserves", oldKey, "->", me)
+    end
+end
+
 function ns:PLAYER_LOGIN()
+    migratePlayerKeys()
     ns.Debug("Core", "PLAYER_LOGIN, Interface", select(4, GetBuildInfo()), "Spieler", ns.FullName("player"))
     ns:Fire("LOGIN")
     if ns.db.showOnLogin and ns.mainFrame then
@@ -97,6 +125,10 @@ SlashCmdList.PAENIKSOFTRES = function(msg)
         frame:Show()
     elseif msg == "hide" then
         frame:Hide()
+    elseif msg == "minimap" then
+        local hidden = ns.db.minimap.hide
+        ns.SetMinimapButtonShown(hidden)
+        print(addonName .. ": Minimap-Button " .. (hidden and "an" or "aus"))
     elseif msg == "" or msg == "toggle" then
         frame:SetShown(not frame:IsShown())
     elseif msg == "debug" then
@@ -106,9 +138,11 @@ SlashCmdList.PAENIKSOFTRES = function(msg)
         setForceRole(msg)
     elseif msg == "auto" then
         setForceRole(nil)
+    elseif msg == "fake" then
+        ns.AddFakeReserves()
     elseif msg == "probe" then
         ns.RunProbe()
     else
-        print(addonName .. ": Befehle: show, hide, toggle, lead, raider, auto, probe, debug")
+        print(addonName .. ": Befehle: show, hide, toggle, minimap, lead, raider, auto, probe, fake, debug")
     end
 end

@@ -7,6 +7,12 @@
     "PanelTemplates_SetNumTabs",
     "PanelTemplates_SetTab",
     "PanelTemplates_SetTabEnabled",
-    "SOUNDKIT"
+    "SOUNDKIT",
+    "ScrollUtil",
+    "CreateScrollBoxListLinearView",
+    "Item",
+    "SetPortraitTextureFromCreatureDisplayID",
+    "CreateDataProvider",
+    "ScrollBoxConstants"
   ]
 }

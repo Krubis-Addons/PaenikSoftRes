@@ -3,6 +3,7 @@
 ## Notes: Soft-Reserve-Verwaltung für Raids: Regeln, Reserves, Loot-Anzeige und Roll-Runden.
 ## Author: Krubis Addons
 ## Version: @project-version@
+## IconTexture: Interface\Icons\INV_Misc_Bag_08
 ## SavedVariables: PaenikSoftResDB, PaenikSoftResDebugLog
 
 Debug.lua
@@ -12,6 +13,10 @@ Roles.lua
 Data\LootData.lua
 Data\EJProvider.lua
 Data\Instances\MoltenCore.lua
+Comm.lua
 UI\MainFrame.lua
+UI\MinimapButton.lua
+UI\RaiderPanel.lua
 UI\LeadPanel.lua
+UI\OverviewPanel.lua
 Probe.lua

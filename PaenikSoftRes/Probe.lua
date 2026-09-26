@@ -67,6 +67,8 @@ function ns.RunProbe()
     end
     ns.Debug("Probe", "C_EncounterJournal:", type(C_EncounterJournal), "C_ChatInfo.SendAddonMessage:",
         type(C_ChatInfo and C_ChatInfo.SendAddonMessage))
+    ns.Debug("Probe", "Namen: UnitName", UnitName("player"), "| UnitFullName", UnitFullName("player"),
+        "| Realm", GetRealmName(), "| normalisiert", GetNormalizedRealmName(), "| FullName", ns.FullName("player"))
     probeEJ()
     local ejCount = 0
     for _, instance in ipairs(ns.LootData:GetInstances()) do
@@ -82,4 +84,37 @@ function ns.RunProbe()
         print(addonName .. ": Probe – fehlend: " .. table.concat(missing, ", "))
     end
     print(addonName .. ": Details im Debug-Log (nach /reload lesbar).")
+end
+
+-- Test-Reserves erfundener Spieler (nur zum Testen der Anzeigen ohne Gruppe).
+function ns.AddFakeReserves()
+    local s = ns.Session:Get()
+    if IsInGroup and IsInGroup() then
+        print(addonName .. ": Testspieler nur ohne Gruppe.")
+        return
+    end
+    if not s or not s.instanceKey or not ns.Session:IsOwner() then
+        print(addonName .. ": Erst eine eigene Sitzung mit Instanz anlegen.")
+        return
+    end
+    local items = {}
+    for _, encounter in ipairs(ns.LootData:GetEncounters(s.instanceKey)) do
+        for _, itemID in ipairs(encounter.items) do
+            table.insert(items, itemID)
+        end
+    end
+    if #items == 0 then
+        print(addonName .. ": Die Instanz hat keine Loot-Daten.")
+        return
+    end
+    local realm = GetNormalizedRealmName() or "Test"
+    for i = 1, 5 do
+        local picks = {}
+        for _ = 1, s.maxReserves do
+            table.insert(picks, items[math.random(#items)])
+        end
+        -- source "fake": wird nie an die Gruppe gesendet
+        ns.Session:ApplyRemoteReserves("Testspieler" .. i .. "-" .. realm, picks, "fake")
+    end
+    print(addonName .. ": 5 Testspieler mit Reserves eingetragen.")
 end

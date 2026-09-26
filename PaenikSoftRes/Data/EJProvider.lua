@@ -44,8 +44,14 @@ function EJProvider:GetInstances()
     return list
 end
 
--- Loot wird evtl. erst nachgeladen (EJ_LOOT_DATA_RECIEVED); das Nachladen kommt mit Iteration 4.
+-- Loot wird evtl. erst nachgeladen (EJ_LOOT_DATA_RECIEVED). Offen, bis das EJ in Forever aktiv ist.
+-- Cache: jeder Aufruf verstellt sonst die EJ-Auswahl der Blizzard-UI.
+local encounterCache = {}
+
 function EJProvider:GetEncounters(key)
+    if encounterCache[key] then
+        return encounterCache[key]
+    end
     local instanceID = tonumber(key)
     if not instanceID then return {} end
     EJ_SelectInstance(instanceID)
@@ -61,9 +67,16 @@ function EJProvider:GetEncounters(key)
                 table.insert(items, info.itemID)
             end
         end
-        table.insert(encounters, { name = name, items = items })
+        local displayID
+        if type(EJ_GetCreatureInfo) == "function" then
+            displayID = select(4, EJ_GetCreatureInfo(1, encounterID))
+        end
+        table.insert(encounters, { name = name, displayID = displayID, items = items })
         index = index + 1
         name, _, encounterID = EJ_GetEncounterInfoByIndex(index, instanceID)
+    end
+    if #encounters > 0 then
+        encounterCache[key] = encounters
     end
     return encounters
 end

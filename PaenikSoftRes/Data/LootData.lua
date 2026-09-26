@@ -3,7 +3,7 @@
 --   provider.id                  eindeutige Kennung ("static", "ej", ...)
 --   provider:IsAvailable()       true, wenn Daten geliefert werden können
 --   provider:GetInstances()      { { key, name, isRaid, maxPlayers }, ... }
---   provider:GetEncounters(key)  { { name, items = { itemID, ... } }, ... }
+--   provider:GetEncounters(key)  { { name, displayID?, items = { itemID, ... } }, ... }
 -- Nach außen werden Instanzen über "providerID:key" angesprochen.
 local _, ns = ...
 

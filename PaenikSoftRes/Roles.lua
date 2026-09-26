@@ -12,11 +12,8 @@ function Roles:IsLead()
     if not (IsInGroup and IsInGroup()) then
         return true -- solo: zum Testen immer Raidlead
     end
-    if UnitIsGroupLeader("player") then
-        return true
-    end
-    local session = ns.Session:Get()
-    return UnitIsGroupAssistant("player") and session ~= nil and session.leader == ns.FullName("player")
+    -- In der Gruppe ist nur der Gruppenleiter Raidlead (eindeutige Hoheit über die Sitzung).
+    return UnitIsGroupLeader("player") and true or false
 end
 
 function Roles:GetRoleName()
