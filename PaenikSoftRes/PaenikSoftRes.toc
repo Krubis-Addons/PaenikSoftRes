@@ -31,6 +31,7 @@ UI\MinimapButton.lua
 UI\RaiderPanel.lua
 UI\LeadPanel.lua
 UI\OverviewPanel.lua
+UI\LootBrowser.lua
 UI\LootPanel.lua
 UI\RollFrames.lua
 UI\ImportDialog.lua

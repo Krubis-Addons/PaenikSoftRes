@@ -1,5 +1,5 @@
--- Hauptfenster mit den Tabs "Raider", "Raidlead" und "Übersicht".
--- Inhalte: UI/RaiderPanel.lua, UI/LeadPanel.lua, UI/OverviewPanel.lua
+-- Hauptfenster mit den Tabs "Raider", "Raidlead", "Übersicht" und "Loot".
+-- Inhalte: UI/RaiderPanel.lua, UI/LeadPanel.lua, UI/OverviewPanel.lua, UI/LootBrowser.lua
 local _, ns = ...
 
 local UI = {}
@@ -11,6 +11,7 @@ UI.ICON = "Interface\\Cursor\\LootAll"
 UI.TAB_RAIDER = 1
 UI.TAB_LEAD = 2
 UI.TAB_OVERVIEW = 3
+UI.TAB_LOOT = 4
 
 local mainFrame = CreateFrame("Frame", nil, UIParent, "PortraitFrameTemplate")
 mainFrame:SetSize(760, 540)
@@ -60,6 +61,7 @@ local panels = {
     [UI.TAB_RAIDER] = createPanel(),
     [UI.TAB_LEAD] = createPanel(),
     [UI.TAB_OVERVIEW] = createPanel(),
+    [UI.TAB_LOOT] = createPanel(),
 }
 
 function UI.GetPanel(tabID)
@@ -111,6 +113,76 @@ function UI.CreateScrollList(parent, rowHeight, initializer)
         end)
     end)
     return scrollBox
+end
+
+-- Bossliste mit Porträts (Raider-Tab und Loot-Browser) ---------------------------------
+UI.BOSS_ROW_HEIGHT = 40
+UI.ALL_BOSSES = 0
+UI.WISHLIST = -1 -- Eintrag „Wunschliste“ ganz oben
+UI.OWNED_TEXT = "|cff66ccffIm Besitz|r"
+local ALL_BOSSES_ICON = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull"
+local WISHLIST_FALLBACK_ICON = "Interface\\Icons\\INV_Misc_Note_01"
+local PORTRAIT_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+
+-- data = { index, name, displayID, killed, info }; info = fertiger Text der zweiten Zeile.
+-- row.bossIndex = data.index; onClick(row, mouseButton) nimmt Links- und Rechtsklicks.
+function UI.InitBossRow(row, data, selected, onClick)
+    if not row.portrait then
+        row.bg = row:CreateTexture(nil, "BACKGROUND")
+        row.bg:SetAllPoints()
+        row.highlight = row:CreateTexture(nil, "HIGHLIGHT")
+        row.highlight:SetAllPoints()
+        row.highlight:SetColorTexture(1, 1, 1, 0.08)
+        row.portrait = row:CreateTexture(nil, "ARTWORK")
+        row.portrait:SetSize(UI.BOSS_ROW_HEIGHT - 6, UI.BOSS_ROW_HEIGHT - 6)
+        row.portrait:SetPoint("LEFT", row, "LEFT", 3, 0)
+        row.mask = row:CreateMaskTexture()
+        row.mask:SetAllPoints(row.portrait)
+        row.mask:SetTexture(PORTRAIT_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+        row.portrait:AddMaskTexture(row.mask)
+        -- Wunschliste: Stern ohne runde Maske (die würde ihn beschneiden), mittig im Porträtbereich
+        row.star = row:CreateTexture(nil, "ARTWORK")
+        row.star:SetSize(24, 24)
+        row.star:SetPoint("CENTER", row.portrait, "CENTER")
+        row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        row.name:SetPoint("TOPLEFT", row.portrait, "TOPRIGHT", 6, -3)
+        row.name:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+        row.name:SetJustifyH("LEFT")
+        row.name:SetWordWrap(false)
+        row.info = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        row.info:SetPoint("BOTTOMLEFT", row.portrait, "BOTTOMRIGHT", 6, 3)
+        row.info:SetJustifyH("LEFT")
+        row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    end
+    row:SetScript("OnClick", onClick)
+    row.bossIndex = data.index
+    local isWishlist = data.index == UI.WISHLIST
+    row.portrait:SetShown(not isWishlist)
+    row.star:SetShown(isWishlist)
+    if isWishlist and not ns.Wishlist.SetIconTexture(row.star) then
+        row.star:SetTexture(WISHLIST_FALLBACK_ICON)
+    end
+    if data.displayID then
+        SetPortraitTextureFromCreatureDisplayID(row.portrait, data.displayID)
+    else
+        row.portrait:SetTexture(ALL_BOSSES_ICON)
+    end
+    row.portrait:SetDesaturated(data.killed == true)
+    row.name:SetText(data.killed and ("|cff808080" .. data.name .. "|r") or data.name)
+    row.info:SetText(data.info or "")
+    if selected then
+        row.bg:SetColorTexture(1, 0.82, 0, 0.18)
+        row.name:SetFontObject("GameFontHighlight")
+    else
+        row.bg:SetColorTexture(0, 0, 0, 0)
+        row.name:SetFontObject("GameFontNormal")
+    end
+end
+
+-- Stern mit Anzahl für die zweite Zeile einer Boss-Zeile ("" bei 0)
+function UI.WishCountText(count)
+    if not count or count == 0 then return nil end
+    return ns.Wishlist.Icon(10) .. "|cffffd100" .. count .. "|r"
 end
 
 -- Anzeige eines Items: farbiger Name + Icon. Lädt fehlende Item-Daten nach
@@ -332,7 +404,8 @@ local raiderTab = createTab(UI.TAB_RAIDER, "Raider")
 raiderTab:SetPoint("TOPLEFT", mainFrame, "BOTTOMLEFT", 12, 2)
 createTab(UI.TAB_LEAD, "Raidlead")
 createTab(UI.TAB_OVERVIEW, "Übersicht")
-PanelTemplates_SetNumTabs(mainFrame, 3)
+createTab(UI.TAB_LOOT, "Loot")
+PanelTemplates_SetNumTabs(mainFrame, 4)
 selectTab(UI.TAB_RAIDER)
 
 local function refresh()

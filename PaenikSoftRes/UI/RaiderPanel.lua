@@ -5,14 +5,10 @@ local UI = ns.UI
 local panel = UI.GetPanel(UI.TAB_RAIDER)
 
 local ROW_HEIGHT = 26
-local BOSS_ROW_HEIGHT = 40
 local SIDEBAR_WIDTH = 190
-local ALL_BOSSES = 0
-local WISHLIST = -1 -- Eintrag „Wunschliste“ in der Bossliste
-local WISHLIST_FALLBACK_ICON = "Interface\\Icons\\INV_Misc_Note_01"
-local ALL_BOSSES_ICON = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull"
-local PORTRAIT_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
-local OWNED_TEXT = "|cff66ccffIm Besitz|r"
+local ALL_BOSSES = UI.ALL_BOSSES
+local WISHLIST = UI.WISHLIST -- Eintrag „Wunschliste“ in der Bossliste
+local OWNED_TEXT = UI.OWNED_TEXT
 
 local selectedBoss = ALL_BOSSES
 local lastInstanceKey
@@ -195,48 +191,6 @@ local function onBossClick(row, mouseButton)
 end
 
 local function initBossRow(row, data)
-    if not row.portrait then
-        row.bg = row:CreateTexture(nil, "BACKGROUND")
-        row.bg:SetAllPoints()
-        row.highlight = row:CreateTexture(nil, "HIGHLIGHT")
-        row.highlight:SetAllPoints()
-        row.highlight:SetColorTexture(1, 1, 1, 0.08)
-        row.portrait = row:CreateTexture(nil, "ARTWORK")
-        row.portrait:SetSize(BOSS_ROW_HEIGHT - 6, BOSS_ROW_HEIGHT - 6)
-        row.portrait:SetPoint("LEFT", row, "LEFT", 3, 0)
-        row.mask = row:CreateMaskTexture()
-        row.mask:SetAllPoints(row.portrait)
-        row.mask:SetTexture(PORTRAIT_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-        row.portrait:AddMaskTexture(row.mask)
-        -- Wunschliste: Stern ohne runde Maske (die würde ihn beschneiden), mittig im Porträtbereich
-        row.star = row:CreateTexture(nil, "ARTWORK")
-        row.star:SetSize(24, 24)
-        row.star:SetPoint("CENTER", row.portrait, "CENTER")
-        row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        row.name:SetPoint("TOPLEFT", row.portrait, "TOPRIGHT", 6, -3)
-        row.name:SetPoint("RIGHT", row, "RIGHT", -4, 0)
-        row.name:SetJustifyH("LEFT")
-        row.name:SetWordWrap(false)
-        row.info = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        row.info:SetPoint("BOTTOMLEFT", row.portrait, "BOTTOMRIGHT", 6, 3)
-        row.info:SetJustifyH("LEFT")
-        row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-        row:SetScript("OnClick", onBossClick)
-    end
-    row.bossIndex = data.index
-    local isWishlist = data.index == WISHLIST
-    row.portrait:SetShown(not isWishlist)
-    row.star:SetShown(isWishlist)
-    if isWishlist and not ns.Wishlist.SetIconTexture(row.star) then
-        row.star:SetTexture(WISHLIST_FALLBACK_ICON)
-    end
-    if data.displayID then
-        SetPortraitTextureFromCreatureDisplayID(row.portrait, data.displayID)
-    else
-        row.portrait:SetTexture(ALL_BOSSES_ICON)
-    end
-    row.portrait:SetDesaturated(data.killed == true)
-    row.name:SetText(data.killed and ("|cff808080" .. data.name .. "|r") or data.name)
     local info = {}
     if data.killed then
         table.insert(info, "|cff808080gelegt|r")
@@ -244,20 +198,12 @@ local function initBossRow(row, data)
     if data.mine > 0 then
         table.insert(info, "|cff40ff40" .. data.mine .. " reserviert|r")
     end
-    if (data.wished or 0) > 0 then
-        table.insert(info, ns.Wishlist.Icon(10) .. "|cffffd100" .. data.wished .. "|r")
-    end
-    row.info:SetText(table.concat(info, "  "))
-    if data.index == selectedBoss then
-        row.bg:SetColorTexture(1, 0.82, 0, 0.18)
-        row.name:SetFontObject("GameFontHighlight")
-    else
-        row.bg:SetColorTexture(0, 0, 0, 0)
-        row.name:SetFontObject("GameFontNormal")
-    end
+    table.insert(info, UI.WishCountText(data.wished))
+    data.info = table.concat(info, "  ")
+    UI.InitBossRow(row, data, data.index == selectedBoss, onBossClick)
 end
 
-local bossList = UI.CreateScrollList(panel, BOSS_ROW_HEIGHT, initBossRow)
+local bossList = UI.CreateScrollList(panel, UI.BOSS_ROW_HEIGHT, initBossRow)
 bossList:SetPoint("TOPLEFT", viewDropdown, "BOTTOMLEFT", 0, -10)
 bossList:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 0, 0)
 bossList:SetWidth(SIDEBAR_WIDTH)

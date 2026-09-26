@@ -10,6 +10,7 @@
     "PanelTemplates_SetTabEnabled",
     "SOUNDKIT",
     "MenuUtil",
+    "HandleModifiedItemClick",
     "RANDOM_ROLL_RESULT",
     "LootFrame",
     "TooltipDataProcessor",
