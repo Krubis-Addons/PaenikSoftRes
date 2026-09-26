@@ -261,7 +261,7 @@ local function refreshMyReserves(s, kind)
     if status == "pending" and kind == "guild" then
         local online = ns.GuildSync:IsOnline(s.leader)
         text = text .. "  |cffffd100ausstehend|r |cff999999(Raidlead "
-            .. (online and "online – wird gesendet" or "offline – wird übertragen, sobald er online ist") .. ")|r"
+            .. (online and "online – wird gesendet" or "offline – wird über die Gilde weitergegeben") .. ")|r"
     elseif status == "pending" then
         text = text .. "  |cffffd100warte auf Raidlead …|r"
     elseif status == "rejected" then

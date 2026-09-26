@@ -14,6 +14,11 @@
 --   GS^sid^signedAt^id,id         (Whisper an den Raidlead) Anmeldung eines Raiders
 --   GA^sid^signedAt^outdated      (Whisper an den Raider) Anmeldung verarbeitet (outdated=1: neuere Auswahl vorhanden)
 --   GX^sid^signedAt^Text          (Whisper an den Raider) Anmeldung abgelehnt
+--   GU^sid^Spieler^signedAt^id,id (Gilde) Anmeldung, von allen gespeichert und an den Raidlead
+--                                 weitergereicht, sobald er online ist (auch ohne den Raider)
+--   GC^sid^Spieler^signedAt^Status^Text (Gilde, vom Raidlead) Ergebnis: a = angenommen,
+--                                 o = überholt, x = abgelehnt; Mitglieder verwerfen die Weitergabe
+-- Weitergegebene Anmeldungen werden bewusst ohne Echtheitsprüfung übernommen (Entscheidung des Nutzers).
 local _, ns = ...
 
 local GuildSync = {}
@@ -294,6 +299,7 @@ function Signup:Submit(s, itemIDs)
     signups()[s.id] = { items = CopyTable(itemIDs), signedAt = GetServerTime(), status = "pending" }
     lastSent[s.id] = nil
     trySend(s.id)
+    GuildSync:BroadcastOwnSignup(s.id) -- andere reichen sie weiter, falls der Raidlead gerade offline ist
     ns:Fire("SESSION_CHANGED")
     return true
 end
@@ -346,6 +352,7 @@ Comm:RegisterHandler("GR", function(sender, f)
     ns.Debug("Guild", "Sitzung empfangen", sid, "Version", version, "von", sender)
     if sender == leader then
         sendPending(leader) -- der Raidlead ist online
+        GuildSync:RelayTo(leader) -- und bekommt weitergegebene Anmeldungen
     end
     ns:Fire("SESSION_CHANGED")
 end)
@@ -411,6 +418,14 @@ Comm:RegisterHandler("GQ", function(sender)
             schedulePublish(s, 0.5 + math.random())
         end
     end
+    -- Fragt ein Raidlead nach, für den wir Anmeldungen anderer bereithalten: weiterreichen
+    for sid, bySession in pairs(ns.db.relaySignups or {}) do
+        local copy = copies()[sid]
+        if copy and copy.leader == sender and next(bySession) then
+            GuildSync:RelayTo(sender)
+            break
+        end
+    end
     -- Weitergabe von Kopien: nicht während eines Raids (Sende-Queue frei halten)
     if (IsInGroup and IsInGroup()) or (IsInInstance and IsInInstance()) then return end
     for sid, copy in pairs(copies()) do
@@ -430,49 +445,164 @@ Comm:RegisterHandler("GQ", function(sender)
     end
 end)
 
--- Anmeldung eines Raiders (Whisper an den Raidlead)
-Comm:RegisterHandler("GS", function(sender, f)
-    markSeen(sender)
-    local sid, signedAt = f[3] or "", tonumber(f[4]) or GetServerTime()
-    local function reject(text)
-        Comm:SendWhisper(sender, "GX", sid, signedAt, Comm.Sanitize(text))
-    end
+-- Raidlead: eine Anmeldung verarbeiten (direkt per Whisper oder über die Gilde weitergegeben).
+-- Liefert "a" (angenommen/unverändert), "o" (überholt durch neuere Auswahl) oder "x" (abgelehnt) + Text.
+local function processSignup(player, sid, signedAt, ids)
     if not enabled() then
-        reject("Gilden-Synchronisation beim Raidlead ist aus")
-        return
+        return "x", "Gilden-Synchronisation beim Raidlead ist aus"
     end
     local s = ownSession(sid)
     if not s or not s.published then
-        reject("Sitzung nicht (mehr) veröffentlicht")
-        return
+        return "x", "Sitzung nicht (mehr) veröffentlicht"
     end
     local now = GetServerTime()
     -- Abgabezeit plausibel halten: nicht in der Zukunft, nicht vor Anlage der Sitzung
     local effective = math.max(math.min(signedAt, now), s.createdAt or 0)
     if s.deadline and now > s.deadline + LATE_WINDOW then
-        reject("Anmeldung zu spät übertragen")
-        return
+        return "x", "Anmeldung zu spät übertragen"
     end
-    local ids = parseItemIDs(f[5])
     -- Eine neuere Auswahl dieses Spielers (z. B. in der Gruppe) hat Vorrang
-    local changedAt = s.changedAt and s.changedAt[sender]
+    local changedAt = s.changedAt and s.changedAt[player]
     if changedAt and changedAt > effective then
-        Comm:SendWhisper(sender, "GA", sid, signedAt, 1)
-        return
+        return "o"
     end
     -- Unveränderte Liste: nur bestätigen, nicht neu verteilen
-    if sameItems(ns.Session:GetReservedItemIDs(sender, s), ids) and (#ids > 0 or s.reserves[sender] == nil) then
-        Comm:SendWhisper(sender, "GA", sid, signedAt, 0)
-        return
+    if sameItems(ns.Session:GetReservedItemIDs(player, s), ids) and (#ids > 0 or s.reserves[player] == nil) then
+        return "a"
     end
-    local ok, err = ns.Session:SetPlayerReserves(sender, ids, "guild", s, effective)
-    if ok then
-        ns.Debug("Guild", "Anmeldung angenommen", sid, sender)
-        Comm:SendWhisper(sender, "GA", sid, signedAt, 0)
+    local ok, err = ns.Session:SetPlayerReserves(player, ids, "guild", s, effective)
+    if not ok then
+        return "x", err
+    end
+    ns.Debug("Guild", "Anmeldung angenommen", sid, player)
+    return "a"
+end
+
+-- Ergebnis an die Gilde melden: Mitglieder verwerfen die weitergegebene Anmeldung,
+-- der Raider (falls online) sieht den Status
+local function announceResult(sid, player, signedAt, status, text)
+    Comm:SendGuild("GC", sid, player, signedAt, status, Comm.Sanitize(text or ""))
+end
+
+-- Anmeldung eines Raiders (Whisper an den Raidlead)
+Comm:RegisterHandler("GS", function(sender, f)
+    markSeen(sender)
+    local sid, signedAt = f[3] or "", tonumber(f[4]) or GetServerTime()
+    local status, text = processSignup(sender, sid, signedAt, parseItemIDs(f[5]))
+    if status == "x" then
+        Comm:SendWhisper(sender, "GX", sid, signedAt, Comm.Sanitize(text))
     else
-        reject(err)
+        Comm:SendWhisper(sender, "GA", sid, signedAt, status == "o" and 1 or 0)
+    end
+    if enabled() then
+        announceResult(sid, sender, signedAt, status, text)
     end
 end)
+
+-- Weitergabe von Anmeldungen über andere Gildenmitglieder ----------------------------------
+-- db.relaySignups[sid][Spieler] = { items, signedAt }: fremde, noch offene Anmeldungen, die dieses Addon
+-- an den Raidlead weiterreicht, sobald er online ist (auch wenn der Raider selbst offline ist).
+local function relays()
+    ns.db.relaySignups = ns.db.relaySignups or {}
+    return ns.db.relaySignups
+end
+
+local heardRelay = {} -- ["sid|Spieler|signedAt"] = GetTime(): im Kanal gehört → nicht doppelt senden
+
+local function relayKey(sid, player, signedAt)
+    return sid .. "|" .. player .. "|" .. tostring(signedAt)
+end
+
+local function storeRelay(sid, player, signedAt, ids)
+    local copy = copies()[sid]
+    if not copy or copy.deleted or player == me() then return end
+    local bySession = relays()[sid] or {}
+    local existing = bySession[player]
+    if existing and existing.signedAt >= signedAt then return end -- pro Spieler gilt die neueste
+    bySession[player] = { items = ids, signedAt = signedAt }
+    relays()[sid] = bySession
+end
+
+local function broadcastRelay(sid, player, entry)
+    local key = relayKey(sid, player, entry.signedAt)
+    if heardRelay[key] and GetTime() - heardRelay[key] < SUPPRESS_WINDOW then return end
+    heardRelay[key] = GetTime()
+    Comm:SendGuild("GU", sid, player, entry.signedAt, table.concat(entry.items, ","))
+end
+
+-- Raidlead ist online: gespeicherte Anmeldungen für seine Sitzungen weiterreichen (zufällig verzögert,
+-- damit nicht alle gleichzeitig senden; wer die Anmeldung schon im Kanal gehört hat, schweigt)
+local relayScheduled = {}
+
+function GuildSync:RelayTo(leader)
+    if relayScheduled[leader] or not enabled() then return end
+    relayScheduled[leader] = true
+    C_Timer.After(2 + math.random() * 6, function()
+        relayScheduled[leader] = nil
+        if not GuildSync:IsOnline(leader) then return end
+        for sid, bySession in pairs(relays()) do
+            local copy = copies()[sid]
+            if copy and not copy.deleted and copy.leader == leader then
+                for player, entry in pairs(bySession) do
+                    broadcastRelay(sid, player, entry)
+                end
+            end
+        end
+    end)
+end
+
+-- Anmeldung in der Gilde: Mitglieder speichern sie zum Weiterreichen, der Raidlead verarbeitet sie
+Comm:RegisterHandler("GU", function(sender, f)
+    if not enabled() then return end
+    markSeen(sender)
+    local sid, player, signedAt = f[3] or "", f[4] or "", tonumber(f[5]) or 0
+    if player == "" then return end
+    local ids = parseItemIDs(f[6])
+    heardRelay[relayKey(sid, player, signedAt)] = GetTime()
+    if ownSession(sid) then
+        -- Weitergegebene Anmeldungen werden ohne Echtheitsprüfung übernommen (bewusste Entscheidung)
+        local status, text = processSignup(player, sid, signedAt, ids)
+        announceResult(sid, player, signedAt, status, text)
+    else
+        storeRelay(sid, player, signedAt, ids)
+    end
+end)
+
+-- Ergebnis des Raidleads: Weitergabe erledigt; eigene Anmeldung aktualisieren
+Comm:RegisterHandler("GC", function(sender, f)
+    if not enabled() then return end
+    markSeen(sender)
+    local sid, player, signedAt, status = f[3] or "", f[4] or "", tonumber(f[5]) or 0, f[6]
+    local copy = copies()[sid]
+    if not copy or copy.leader ~= sender then return end
+    local bySession = relays()[sid]
+    if bySession and bySession[player] and bySession[player].signedAt <= signedAt then
+        bySession[player] = nil
+    end
+    if player == me() then
+        local signup = signups()[sid]
+        if signup and signup.signedAt == signedAt then
+            if status == "o" then
+                signups()[sid] = nil
+            elseif status == "x" then
+                signup.status = "rejected"
+                signup.reason = f[7]
+            else
+                signup.status = "confirmed"
+                signup.reason = nil
+            end
+            ns:Fire("SESSION_CHANGED")
+        end
+    end
+end)
+
+-- Eigene Anmeldung zusätzlich in der Gilde verteilen, damit andere sie weiterreichen können
+function GuildSync:BroadcastOwnSignup(sid)
+    local signup = signups()[sid]
+    if signup and signup.status == "pending" and enabled() then
+        broadcastRelay(sid, me(), signup)
+    end
+end
 
 -- Anmeldung verarbeitet
 Comm:RegisterHandler("GA", function(sender, f)
@@ -524,6 +654,13 @@ local function prune()
             signups()[sid] = nil
         end
     end
+    -- Weitergaben: nur für bekannte Sitzungen und nicht über die Nachfrist hinaus
+    for sid, bySession in pairs(relays()) do
+        local copy = copies()[sid]
+        if not copy or copy.deleted or (copy.deadline and now > copy.deadline + LATE_WINDOW) or not next(bySession) then
+            relays()[sid] = nil
+        end
+    end
 end
 
 -- Erste Synchronisation, sobald die Gildenzugehörigkeit bekannt ist (bei PLAYER_LOGIN oft noch nicht)
@@ -543,6 +680,10 @@ local function initialSync()
                 schedulePublish(s, 1)
             end
         end
+        -- eigene offene Anmeldungen erneut in die Gilde geben (andere reichen sie weiter)
+        for sid in pairs(signups()) do
+            GuildSync:BroadcastOwnSignup(sid)
+        end
     end)
     ns:Fire("SESSION_CHANGED")
 end
@@ -551,6 +692,13 @@ function ns:GUILD_ROSTER_UPDATE()
     refreshRoster()
     initialSync()
     sendPending()
+    -- ist ein Raidlead online, für den wir Anmeldungen anderer bereithalten? (RelayTo ist entprellt)
+    for sid, bySession in pairs(relays()) do
+        local copy = copies()[sid]
+        if copy and next(bySession) and GuildSync:IsOnline(copy.leader) then
+            GuildSync:RelayTo(copy.leader)
+        end
+    end
 end
 
 function ns:PLAYER_GUILD_UPDATE()
