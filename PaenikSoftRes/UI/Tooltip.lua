@@ -9,6 +9,12 @@ local function onItemTooltip(tooltip, data)
     local itemID = data.id
     if issecretvalue and issecretvalue(itemID) then return end
     if type(itemID) ~= "number" then return end
+    local hr = ns.Session:GetHardReserve(itemID)
+    if hr then
+        tooltip:AddLine(" ")
+        tooltip:AddLine("|cffff5050Hard Reserve:|r " .. (hr.note ~= "" and hr.note or "fest vergeben"), 1, 1, 1, true)
+        return
+    end
     local holders, total = UI.FormatHolders(itemID)
     if holders then
         tooltip:AddLine(" ")

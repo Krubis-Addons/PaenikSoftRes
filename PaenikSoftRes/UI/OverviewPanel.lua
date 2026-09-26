@@ -115,8 +115,21 @@ local function buildElements(s)
         item.players = table.concat(names, ", ")
         table.insert(elements, item)
     end
+    -- Hard Reserves oben anzeigen
+    for itemID, hr in pairs(s.hardReserves or {}) do
+        table.insert(elements, {
+            itemID = itemID,
+            total = 0,
+            countText = "|cffff5050HR|r",
+            players = "|cffff5050Hard Reserve: " .. (hr.note ~= "" and hr.note or "fest vergeben") .. "|r",
+            hardReserve = true,
+        })
+    end
     local order = itemOrder(s)
     table.sort(elements, function(a, b)
+        if (a.hardReserve == true) ~= (b.hardReserve == true) then
+            return a.hardReserve == true
+        end
         local oa, ob = order[a.itemID] or math.huge, order[b.itemID] or math.huge
         if oa ~= ob then return oa < ob end
         return a.itemID < b.itemID

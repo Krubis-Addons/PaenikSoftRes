@@ -153,7 +153,30 @@ end
 
 -- Linke Seite: Bosse mit Porträt -------------------------------------------
 
-local function onBossClick(row)
+-- Raidlead: Rechtsklick auf einen Boss der eigenen Sitzung markiert ihn als gelegt (ID fortführen)
+local function showBossMenu(row)
+    local s = ns.Session:GetViewed()
+    if not s or s.leader ~= ns.FullName("player") or not row.bossIndex or row.bossIndex < 1 then return end
+    local index = row.bossIndex
+    MenuUtil.CreateContextMenu(row, function(_, root)
+        root:CreateTitle(row.name:GetText() or "")
+        if ns.Session:IsBossKilled(s, index) then
+            root:CreateButton("Markierung „gelegt“ aufheben", function()
+                ns.Session:SetBossKilled(s, index, false)
+            end)
+        else
+            root:CreateButton("Als gelegt markieren", function()
+                ns.Session:SetBossKilled(s, index, true)
+            end)
+        end
+    end)
+end
+
+local function onBossClick(row, mouseButton)
+    if mouseButton == "RightButton" then
+        showBossMenu(row)
+        return
+    end
     selectedBoss = row.bossIndex
     refreshList()
 end
@@ -180,6 +203,7 @@ local function initBossRow(row, data)
         row.info = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         row.info:SetPoint("BOTTOMLEFT", row.portrait, "BOTTOMRIGHT", 6, 3)
         row.info:SetJustifyH("LEFT")
+        row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         row:SetScript("OnClick", onBossClick)
     end
     row.bossIndex = data.index
@@ -188,8 +212,13 @@ local function initBossRow(row, data)
     else
         row.portrait:SetTexture(ALL_BOSSES_ICON)
     end
-    row.name:SetText(data.name)
-    row.info:SetText(data.mine > 0 and ("|cff40ff40" .. data.mine .. " reserviert|r") or "")
+    row.portrait:SetDesaturated(data.killed == true)
+    row.name:SetText(data.killed and ("|cff808080" .. data.name .. "|r") or data.name)
+    if data.killed then
+        row.info:SetText("|cff808080gelegt|r" .. (data.mine > 0 and ("  |cff40ff40" .. data.mine .. " reserviert|r") or ""))
+    else
+        row.info:SetText(data.mine > 0 and ("|cff40ff40" .. data.mine .. " reserviert|r") or "")
+    end
     if data.index == selectedBoss then
         row.bg:SetColorTexture(1, 0.82, 0, 0.18)
         row.name:SetFontObject("GameFontHighlight")
@@ -307,18 +336,61 @@ end
 
 local lootHeader = UI.CreateText(content, nil, nil, "GameFontNormal")
 
-local function onItemClick(row)
-    if row.itemID then
-        toggleItem(row.itemID, IsShiftKeyDown())
+-- Raidlead: Rechtsklick auf ein Item der eigenen Sitzung → Hard Reserve setzen/entfernen
+local function showItemMenu(row)
+    local s = ns.Session:GetViewed()
+    if not s or s.leader ~= ns.FullName("player") then return end
+    local itemID = row.itemID
+    local hr = ns.Session:GetHardReserve(itemID, s)
+    MenuUtil.CreateContextMenu(row, function(_, root)
+        root:CreateTitle(UI.StripColors(row.name:GetText() or ""))
+        root:CreateButton(hr and "Hard Reserve ändern…" or "Hard Reserve setzen…", function()
+            UI.Prompt("Hard Reserve für wen?\n|cff999999Name oder Notiz, z. B. „Gildenbank“|r", hr and hr.note or "",
+                function(note)
+                    local count = ns.Session:CountReservesOnItem(itemID, s)
+                    UI.Confirm(string.format("%d Soft Reserve(s) auf diesem Item werden entfernt.", count), function()
+                        ns.Session:SetHardReserve(s, itemID, note)
+                    end, count > 0)
+                end)
+        end)
+        if hr then
+            root:CreateButton("Hard Reserve entfernen", function()
+                ns.Session:RemoveHardReserve(s, itemID)
+            end)
+        end
+    end)
+end
+
+local function onItemClick(row, mouseButton)
+    if not row.itemID then return end
+    if mouseButton == "RightButton" then
+        showItemMenu(row)
+        return
     end
+    if row.hardReserve then
+        ns.Print("Dieses Item ist Hard Reserve: " .. (row.hardReserve.note ~= "" and row.hardReserve.note or "fest vergeben"))
+        return
+    end
+    if row.killed and not row.mine then
+        ns.Print("Der Boss für dieses Item ist bereits gelegt.")
+        return
+    end
+    toggleItem(row.itemID, IsShiftKeyDown())
 end
 
 local function onItemEnter(row)
     if not row.itemID then return end
-    local hint = { "Klick: reservieren / entfernen" }
-    local s = ns.Session:GetViewed()
-    if s and s.allowDuplicates and s.maxReserves > 1 then
-        table.insert(hint, "Shift-Klick: ein weiteres Mal reservieren")
+    local hint
+    if row.hardReserve then
+        hint = { "Hard Reserve – nicht reservierbar" }
+    elseif row.killed then
+        hint = { "Boss bereits gelegt – nicht mehr reservierbar" }
+    else
+        hint = { "Klick: reservieren / entfernen" }
+        local s = ns.Session:GetViewed()
+        if s and s.allowDuplicates and s.maxReserves > 1 then
+            table.insert(hint, "Shift-Klick: ein weiteres Mal reservieren")
+        end
     end
     showItemTooltip(row, row.itemID, hint)
 end
@@ -341,16 +413,28 @@ local function initItemRow(row, data)
         row.name:SetPoint("RIGHT", row.info, "LEFT", -6, 0)
         row.name:SetJustifyH("LEFT")
         row.name:SetWordWrap(false)
+        row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         row:SetScript("OnClick", onItemClick)
         row:SetScript("OnEnter", onItemEnter)
         row:SetScript("OnLeave", hideTooltip)
     end
     row.itemID = data.itemID
+    row.killed = data.killed
+    row.hardReserve = data.hardReserve
+    row.mine = data.mine > 0
     local name, icon = UI.GetItemDisplay(data.itemID, onItemLoaded)
     row.icon:SetTexture(icon)
-    row.name:SetText(name)
+    row.icon:SetDesaturated(data.killed == true)
+    row.name:SetText(data.killed and ("|cff808080" .. UI.StripColors(name) .. "|r") or name)
 
     local info = {}
+    if data.hardReserve then
+        local note = data.hardReserve.note ~= "" and data.hardReserve.note or "fest vergeben"
+        table.insert(info, "|cffff5050Hard Reserve: " .. note .. "|r")
+    end
+    if data.killed then
+        table.insert(info, "|cff808080Boss gelegt|r")
+    end
     if data.mine > 0 then
         table.insert(info, data.mine > 1 and ("|cff40ff40Reserviert x" .. data.mine .. "|r") or "|cff40ff40Reserviert|r")
     end
@@ -361,7 +445,9 @@ local function initItemRow(row, data)
         table.insert(info, "|cff999999" .. data.boss .. "|r")
     end
     row.info:SetText(table.concat(info, "  "))
-    if data.mine > 0 then
+    if data.hardReserve then
+        row.bg:SetColorTexture(0.6, 0.1, 0.1, 0.25)
+    elseif data.mine > 0 then
         row.bg:SetColorTexture(0.1, 0.6, 0.1, 0.25)
     else
         row.bg:SetColorTexture(0, 0, 0, 0)
@@ -401,6 +487,7 @@ local function buildBossElements(s, mineCount)
             name = encounter.name,
             displayID = encounter.displayID,
             mine = mine,
+            killed = ns.Session:IsBossKilled(s, index),
         })
     end
     return elements
@@ -417,6 +504,7 @@ local function buildItemElements(s, mineCount)
         end
     end
 
+    local killedOnly = ns.Session:GetKilledOnlyItems(s)
     local elements, index = {}, {}
     for bossIndex, encounter in ipairs(ns.LootData:GetDisplayEncounters(s.instanceKey)) do
         if selectedBoss == ALL_BOSSES or selectedBoss == bossIndex then
@@ -430,6 +518,8 @@ local function buildItemElements(s, mineCount)
                         boss = encounter.name,
                         mine = mineCount[itemID] or 0,
                         others = otherCount[itemID] or 0,
+                        killed = killedOnly[itemID] == true,
+                        hardReserve = ns.Session:GetHardReserve(itemID, s),
                     }
                     index[itemID] = element
                     table.insert(elements, element)

@@ -3,9 +3,11 @@
 -- Raider spiegeln sie und schicken Wünsche per Whisper an ihn.
 --
 -- Nachrichten (Felder getrennt durch "^", Version zuerst):
---   1^R^sid^leader^instKey^instName^max^dup^locked^deadline^name   Lead → Gruppe: Regeln (deadline 0 = keiner)
+--   1^R^sid^leader^instKey^instName^max^dup^locked^deadline^name^killed   Lead → Gruppe: Regeln
+--                                    (deadline 0 = keiner, killed = gelegte Bosse "1,4,7")
 --   1^F^sid                                           Lead → Gruppe: voller Stand folgt (Reserves leeren)
 --   1^P^sid^Name-Realm=id,id;Name-Realm=...           Lead → Gruppe: Reserves (mehrere Spieler)
+--   1^H^sid^leeren(1/0)^itemID=Notiz;...              Lead → Gruppe: Hard Reserves
 --   1^E^sid                                           Lead → Gruppe: Sitzung beendet
 --   1^Q                                               Raider → Gruppe: Stand anfordern
 --   1^S^sid^id,id                                     Raider → Lead (Whisper): eigene Reserves
@@ -105,7 +107,8 @@ local function sendRules()
     local channel = groupChannel()
     if not s or not channel then return end
     send(channel, nil, "R", s.id, s.leader, s.instanceKey or "", sanitize(s.instanceName),
-        s.maxReserves, s.allowDuplicates and 1 or 0, s.locked and 1 or 0, s.deadline or 0, sanitize(s.name))
+        s.maxReserves, s.allowDuplicates and 1 or 0, s.locked and 1 or 0, s.deadline or 0, sanitize(s.name),
+        ns.Session:KilledToString(s))
 end
 
 local function isFakePlayer(s, player)
@@ -145,12 +148,36 @@ local function sendPlayers(players)
     flush()
 end
 
+-- Komplette Liste der Hard Reserves; das erste Stück leert beim Empfänger die alte Liste
+local function sendHardReserves()
+    local s = ns.Session:Get()
+    local channel = groupChannel()
+    if not s or not channel then return end
+    local head = table.concat({ VERSION, "H", s.id, 1 }, SEP) .. SEP
+    local chunk, length, first = {}, #head, true
+    local function flush(force)
+        if #chunk > 0 or force then
+            send(channel, nil, "H", s.id, first and 1 or 0, table.concat(chunk, ";"))
+            chunk, length, first = {}, #head, false
+        end
+    end
+    for _, entry in ipairs(ns.Session:HardReservesToList(s)) do
+        if length + #entry + 1 > MAX_LEN then
+            flush()
+        end
+        table.insert(chunk, entry)
+        length = length + #entry + 1
+    end
+    flush(first) -- ohne Einträge trotzdem einmal senden (leert die Liste)
+end
+
 local function sendFullState()
     local s = ns.Session:Get()
     local channel = groupChannel()
     if not s or not channel then return end
     sendRules()
     send(channel, nil, "F", s.id)
+    sendHardReserves()
     local players = {}
     for player in pairs(s.reserves) do
         table.insert(players, player)
@@ -160,7 +187,7 @@ local function sendFullState()
 end
 
 -- Entprellen: mehrere Änderungen kurz hintereinander → wenige Nachrichten.
-local pendingRules, pendingPlayers, pendingFull = false, {}, false
+local pendingRules, pendingPlayers, pendingFull, pendingHR = false, {}, false, false
 
 local function flushPending()
     if ns.Session:IsMaster() and groupChannel() then
@@ -169,6 +196,9 @@ local function flushPending()
         else
             if pendingRules then
                 sendRules()
+            end
+            if pendingHR then
+                sendHardReserves()
             end
             local players = {}
             for player in pairs(pendingPlayers) do
@@ -179,7 +209,7 @@ local function flushPending()
             end
         end
     end
-    pendingRules, pendingFull = false, false
+    pendingRules, pendingFull, pendingHR = false, false, false
     wipe(pendingPlayers)
 end
 
@@ -205,6 +235,11 @@ end)
 
 ns:On("SESSION_FULL_SYNC", function()
     pendingFull = true
+    scheduleFlush()
+end)
+
+ns:On("SESSION_HR_CHANGED", function()
+    pendingHR = true
     scheduleFlush()
 end)
 
@@ -339,6 +374,7 @@ function handlers.R(sender, f)
         locked = f[9] == "1",
         deadline = tonumber(f[10]) ~= 0 and tonumber(f[10]) or nil,
         name = f[11] ~= "" and f[11] or nil,
+        killed = ns.Session:KilledFromString(f[12]),
     })
 end
 
@@ -351,6 +387,13 @@ end
 function handlers.F(sender, f)
     if isFromSessionLeader(sender, f[3]) then
         ns.Session:ApplyRemoteFullReset(f[3])
+    end
+end
+
+-- Hard Reserves vom Raidlead (f[4] = 1: vorher leeren)
+function handlers.H(sender, f)
+    if isFromSessionLeader(sender, f[3]) then
+        ns.Session:ApplyRemoteHardReserves(f[3], f[5], f[4] == "1")
     end
 end
 

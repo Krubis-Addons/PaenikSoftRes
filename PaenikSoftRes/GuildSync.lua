@@ -6,7 +6,8 @@
 -- Raider liegen lokal (db.signups) und gehen per Whisper an den Raidlead, sobald er online ist.
 --
 -- Nachrichten (Präfix PSR, Felder mit "^"):
---   GR^sid^ver^leader^instKey^instName^max^dup^locked^deadline^name^updatedAt   Regeln (Gilde)
+--   GR^sid^ver^leader^instKey^instName^max^dup^locked^deadline^name^updatedAt^killed   Regeln (Gilde)
+--   GH^sid^ver^leeren^itemID=Notiz;...  Hard Reserves
 --   GF^sid^ver^n                  voller Stand der Reserves folgt, in n GP-Stücken
 --   GP^sid^ver^Name-Realm=id,id;...   bestätigte Reserves (Stück)
 --   GD^sid^ver^leader             Sitzung gelöscht/zurückgezogen (Löschmarke, wird weitergegeben)
@@ -160,7 +161,23 @@ local function sendSessionFull(s)
     local version = s.version or 0
     Comm:SendGuild("GR", s.id, version, s.leader, s.instanceKey or "", Comm.Sanitize(s.instanceName),
         s.maxReserves or 1, s.allowDuplicates and 1 or 0, s.locked and 1 or 0, s.deadline or 0,
-        Comm.Sanitize(s.name), s.updatedAt or 0)
+        Comm.Sanitize(s.name), s.updatedAt or 0, ns.Session:KilledToString(s))
+    -- Hard Reserves (erstes Stück leert beim Empfänger)
+    local hrChunks, hrChunk, hrLength = {}, {}, 60
+    for _, entry in ipairs(ns.Session:HardReservesToList(s)) do
+        if hrLength + #entry + 1 > Comm.MAX_LEN then
+            table.insert(hrChunks, table.concat(hrChunk, ";"))
+            hrChunk, hrLength = {}, 60
+        end
+        table.insert(hrChunk, entry)
+        hrLength = hrLength + #entry + 1
+    end
+    if #hrChunk > 0 then
+        table.insert(hrChunks, table.concat(hrChunk, ";"))
+    end
+    for i, chunk in ipairs(hrChunks) do
+        Comm:SendGuild("GH", s.id, version, i == 1 and 1 or 0, chunk)
+    end
     Comm:SendGuild("GF", s.id, version, #chunks)
     for _, chunk in ipairs(chunks) do
         Comm:SendGuild("GP", s.id, version, chunk)
@@ -346,6 +363,7 @@ Comm:RegisterHandler("GR", function(sender, f)
     copy.deadline = tonumber(f[11]) ~= 0 and tonumber(f[11]) or nil
     copy.name = f[12] ~= "" and f[12] or nil
     copy.updatedAt = tonumber(f[13]) or GetServerTime()
+    copy.killed = ns.Session:KilledFromString(f[14])
     copy.receivedAt = GetServerTime()
     copy.complete = false -- erst mit allen GP-Stücken vollständig
     copies()[sid] = copy
@@ -354,6 +372,19 @@ Comm:RegisterHandler("GR", function(sender, f)
         sendPending(leader) -- der Raidlead ist online
         GuildSync:RelayTo(leader) -- und bekommt weitergegebene Anmeldungen
     end
+    ns:Fire("SESSION_CHANGED")
+end)
+
+-- Hard Reserves einer Kopie (gleiche Version; wiederholte Weitergaben liefern dieselben Daten)
+Comm:RegisterHandler("GH", function(sender, f)
+    if not enabled() then return end
+    markSeen(sender)
+    local copy = copies()[f[3] or ""]
+    if not copy or copy.deleted or copy.version ~= tonumber(f[4]) then return end
+    if f[5] == "1" then
+        copy.hardReserves = nil
+    end
+    ns.Session:ApplyHardReserveEntries(copy, f[6])
     ns:Fire("SESSION_CHANGED")
 end)
 

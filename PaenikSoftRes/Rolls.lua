@@ -577,6 +577,15 @@ ns.Comm:RegisterHandler("RC", function(sender, f)
     end
 end)
 
+-- Start mit Rückfrage, wenn das Item Hard Reserve ist
+function Rolls:StartChecked(itemID, link, lootKey)
+    local hr = ns.Session:GetHardReserve(itemID)
+    ns.UI.Confirm("Dieses Item ist Hard Reserve für „" .. (hr and hr.note ~= "" and hr.note or "?")
+        .. "“.\nTrotzdem auswürfeln?", function()
+        Rolls:Start(itemID, link, nil, nil, nil, lootKey)
+    end, hr ~= nil)
+end
+
 -- /paeniksoftres roll <Itemlink oder ItemID>
 function ns.StartRollFromSlash(arg)
     local itemID = tonumber(arg) or (arg and arg ~= "" and C_Item.GetItemInfoInstant(arg))
@@ -584,7 +593,7 @@ function ns.StartRollFromSlash(arg)
         ns.Print("Aufruf: /paeniksoftres roll <Itemlink oder ItemID>")
         return
     end
-    Rolls:Start(itemID, arg:find("|H") and arg or nil)
+    Rolls:StartChecked(itemID, arg:find("|H") and arg or nil)
 end
 
 ns:On("LOGIN", function()

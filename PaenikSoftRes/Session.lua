@@ -271,6 +271,64 @@ function Session:TakeOver(leader)
     return true
 end
 
+-- Gelegte Bosse (Index in LootData:GetEncounters) markieren; nur eigene Sitzungen
+function Session:SetBossKilled(s, index, killed)
+    if not s or s.leader ~= ns.FullName("player") or type(index) ~= "number" or index < 1 then return false end
+    s.killed = s.killed or {}
+    s.killed[index] = killed and true or nil
+    changed("Boss gelegt", index, killed)
+    Session:Touch(s)
+    if s == ownActive() then
+        ns:Fire("SESSION_RULES_CHANGED")
+    end
+    return true
+end
+
+function Session:IsBossKilled(s, index)
+    return s ~= nil and s.killed ~= nil and s.killed[index] == true
+end
+
+-- Gelegte Bosse als Text "1,4,7" (Sync) und zurück
+function Session:KilledToString(s)
+    local list = {}
+    for index in pairs(s and s.killed or {}) do
+        table.insert(list, index)
+    end
+    table.sort(list)
+    return table.concat(list, ",")
+end
+
+function Session:KilledFromString(text)
+    local killed
+    for index in (text or ""):gmatch("%d+") do
+        killed = killed or {}
+        killed[tonumber(index)] = true
+    end
+    return killed
+end
+
+-- Neue Sitzung, die dieselbe Raid-ID fortführt: gleiche Instanz und Regeln, gelegte Bosse bleiben
+-- markiert; keine Reserves, kein Verlauf, kein Anmeldeschluss. Wird aktiv.
+function Session:Continue()
+    local old = ownActive()
+    if not old then return false end
+    local s = newSession(old.leader)
+    s.instanceKey = old.instanceKey
+    s.instanceName = old.instanceName
+    s.maxReserves = old.maxReserves or 1
+    s.allowDuplicates = old.allowDuplicates
+    s.killed = old.killed and CopyTable(old.killed) or nil
+    s.parentId = old.id
+    s.name = (old.name or autoName(old)) .. " (Fortsetzung)"
+    s.nameAuto = false
+    ownSessions()[s.id] = s
+    ns.db.activeSessionId = s.id
+    changed("Sitzung fortgeführt", old.id, "->", s.id)
+    Session:Touch(s)
+    ns:Fire("SESSION_RULES_CHANGED")
+    return true
+end
+
 -- Regeln auf eine eigene Sitzung anwenden; nur die aktive wird an die Gruppe verteilt
 local function applyRules(s, rules)
     -- Reserves gehören zu einer Instanz: bei einem Wechsel verfallen sie.
@@ -446,6 +504,116 @@ function Session:GetInstanceItemSet(s)
     return set
 end
 
+-- Hard Reserves: fest vergebene Items (session.hardReserves[itemID] = { note = "Empfänger/Notiz" }).
+-- Nicht reservierbar, werden nicht ausgewürfelt.
+local MAX_NOTE_LENGTH = 30
+
+function Session:GetHardReserve(itemID, s)
+    s = s or self:Get()
+    return s and s.hardReserves and s.hardReserves[itemID]
+end
+
+-- Anzahl Soft Reserves auf einem Item (für die Rückfrage vor einem Hard Reserve)
+function Session:CountReservesOnItem(itemID, s)
+    local count = 0
+    for _, list in pairs(s and s.reserves or {}) do
+        for _, entry in ipairs(list) do
+            if entry.itemID == itemID then
+                count = count + 1
+            end
+        end
+    end
+    return count
+end
+
+local function hardReservesChanged(s, reason, ...)
+    changed(reason, ...)
+    Session:Touch(s)
+    if s == ownActive() then
+        ns:Fire("SESSION_HR_CHANGED")
+    end
+end
+
+-- Hard Reserve setzen; vorhandene Soft Reserves auf dem Item werden entfernt
+function Session:SetHardReserve(s, itemID, note)
+    if not s or s.leader ~= ns.FullName("player") or type(itemID) ~= "number" then return false end
+    note = strtrim((note or ""):gsub("[%^;=,|]", "") or ""):sub(1, MAX_NOTE_LENGTH)
+    for player, list in pairs(s.reserves) do
+        local removed = false
+        for i = #list, 1, -1 do
+            if list[i].itemID == itemID then
+                table.remove(list, i)
+                removed = true
+            end
+        end
+        if removed then
+            if #list == 0 then
+                s.reserves[player] = nil
+            end
+            if s == ownActive() then
+                ns:Fire("SESSION_RESERVES_CHANGED", player)
+            end
+        end
+    end
+    s.hardReserves = s.hardReserves or {}
+    s.hardReserves[itemID] = { note = note }
+    hardReservesChanged(s, "Hard Reserve gesetzt", itemID, note)
+    return true
+end
+
+function Session:RemoveHardReserve(s, itemID)
+    if not s or s.leader ~= ns.FullName("player") or not (s.hardReserves and s.hardReserves[itemID]) then
+        return false
+    end
+    s.hardReserves[itemID] = nil
+    hardReservesChanged(s, "Hard Reserve entfernt", itemID)
+    return true
+end
+
+-- Hard Reserves als Text "itemID=Notiz;..." (Sync) und zurück
+function Session:HardReservesToList(s)
+    local list = {}
+    for itemID, entry in pairs(s and s.hardReserves or {}) do
+        table.insert(list, itemID .. "=" .. (entry.note or ""))
+    end
+    table.sort(list)
+    return list
+end
+
+function Session:ApplyHardReserveEntries(s, text)
+    s.hardReserves = s.hardReserves or {}
+    for entry in (text or ""):gmatch("[^;]+") do
+        local itemID, note = entry:match("^(%d+)=(.*)$")
+        if itemID then
+            s.hardReserves[tonumber(itemID)] = { note = note }
+        end
+    end
+end
+
+-- Items, die NUR von bereits gelegten Bossen droppen (nicht mehr reservierbar)
+function Session:GetKilledOnlyItems(s)
+    s = s or self:Get()
+    local result = {}
+    if not s or not s.instanceKey or not s.killed or not next(s.killed) then return result end
+    local alive = {}
+    for index, encounter in ipairs(ns.LootData:GetDisplayEncounters(s.instanceKey)) do
+        if not s.killed[index] then
+            for _, itemID in ipairs(encounter.items) do
+                alive[itemID] = true
+            end
+        end
+    end
+    for index in pairs(s.killed) do
+        local encounter = ns.LootData:GetDisplayEncounters(s.instanceKey)[index]
+        for _, itemID in ipairs(encounter and encounter.items or {}) do
+            if not alive[itemID] then
+                result[itemID] = true
+            end
+        end
+    end
+    return result
+end
+
 -- Prüft eine komplette Reserve-Liste gegen die Regeln der Sitzung s.
 -- player (optional): Verkleinern einer bestehenden Liste ist immer erlaubt,
 -- auch wenn der Raidlead das Limit inzwischen gesenkt hat.
@@ -464,6 +632,7 @@ function Session:ValidateReserves(itemIDs, player, s, signedAt)
         return false, "Limit erreicht (" .. s.maxReserves .. ")"
     end
     local itemSet = self:GetInstanceItemSet(s) or {}
+    local killedOnly = self:GetKilledOnlyItems(s)
     -- Items, die der Spieler schon hat (z. B. aus einem softres.it-Import mit eigenen Regeln),
     -- bleiben erlaubt – sonst könnte er seine Liste nicht mehr bearbeiten.
     local existing = {}
@@ -482,6 +651,12 @@ function Session:ValidateReserves(itemIDs, player, s, signedAt)
         else
             if not itemSet[itemID] then
                 return false, "Item gehört nicht zur Instanz: " .. itemID
+            end
+            if killedOnly[itemID] then
+                return false, "Der Boss für dieses Item ist bereits gelegt"
+            end
+            if s.hardReserves and s.hardReserves[itemID] then
+                return false, "Item ist Hard Reserve"
             end
             if seen[itemID] and not s.allowDuplicates then
                 return false, "Item darf nur einmal reserviert werden"
@@ -616,6 +791,7 @@ function Session:ApplyRemoteSession(info)
     s.allowDuplicates = info.allowDuplicates
     s.locked = info.locked
     s.deadline = info.deadline
+    s.killed = info.killed
     changed("Sitzung vom Raidlead übernommen", info.id, info.leader)
 end
 
@@ -639,8 +815,20 @@ function Session:ApplyRemoteFullReset(sessionID)
     local s = self:Get()
     if s and s.id == sessionID then
         wipe(s.reserves)
+        s.hardReserves = nil
         changed("Voller Stand vom Raidlead folgt", sessionID)
     end
+end
+
+-- Hard Reserves vom Raidlead übernehmen (clear = vorher leeren)
+function Session:ApplyRemoteHardReserves(sessionID, text, clear)
+    local s = self:Get()
+    if not s or s.id ~= sessionID then return end
+    if clear then
+        s.hardReserves = nil
+    end
+    self:ApplyHardReserveEntries(s, text)
+    changed("Hard Reserves vom Raidlead", sessionID)
 end
 
 function Session:ApplyRemoteEnd(sessionID)

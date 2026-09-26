@@ -60,7 +60,7 @@ local function updatePreview()
         string.format("|cff60ff60%s: %d Spieler, %d Reserves erkannt.|r", result.format, result.players, result.count),
     }
     if result.hardReserves and result.hardReserves > 0 then
-        table.insert(lines, string.format("|cff999999%d Hard Reserves werden nicht übernommen.|r", result.hardReserves))
+        table.insert(lines, string.format("|cffff5050%d Hard Reserves werden übernommen (Soft Reserves darauf entfallen).|r", result.hardReserves))
     end
     if #result.notInGroup > 0 then
         local names = {}

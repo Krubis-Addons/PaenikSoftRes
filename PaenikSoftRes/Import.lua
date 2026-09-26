@@ -342,8 +342,21 @@ function Import.ParseSoftresGargul(text)
             end
         end
     end
-    -- Hard Reserves (Items, die für jemanden fest vergeben sind) übernimmt das Addon nicht
-    result.hardReserves = type(data.hardreserves) == "table" and #data.hardreserves or 0
+
+    -- Hard Reserves: fest vergebene Items (für wen: Feld "for", sonst Notiz)
+    result.hardReserveList = {}
+    for _, entry in ipairs(type(data.hardreserves) == "table" and data.hardreserves or {}) do
+        local itemID = type(entry) == "table" and tonumber(entry.id)
+        if itemID and itemID > 0 then
+            local note = entry["for"] or entry.note or ""
+            table.insert(result.hardReserveList, { itemID = itemID, note = tostring(note) })
+        end
+    end
+    result.hardReserves = #result.hardReserveList
+    if result.count == 0 and result.hardReserves > 0 then
+        result.itemSet, result.seen = nil, nil
+        return result -- nur Hard Reserves ist auch ein gültiger Import
+    end
     return finishResult(result)
 end
 
@@ -365,7 +378,19 @@ function Import.Apply(result, replaceAll)
     if not ok then
         return false, players
     end
-    ns.Print(string.format("softres.it-Import (%s): %d Spieler, %d Reserves %s.", result.format or "?", players,
-        count, replaceAll and "übernommen (alte Reserves ersetzt)" or "zusammengeführt"))
+    -- Hard Reserves (Gargul-Export): beim Ersetzen die bisherigen verwerfen
+    local s = ns.Session:Get()
+    local hrList = result.hardReserveList or {}
+    if replaceAll and s and s.hardReserves then
+        for itemID in pairs(CopyTable(s.hardReserves)) do
+            ns.Session:RemoveHardReserve(s, itemID)
+        end
+    end
+    for _, hr in ipairs(hrList) do
+        ns.Session:SetHardReserve(s, hr.itemID, hr.note)
+    end
+    ns.Print(string.format("softres.it-Import (%s): %d Spieler, %d Reserves%s %s.", result.format or "?", players,
+        count, #hrList > 0 and (", " .. #hrList .. " Hard Reserves") or "",
+        replaceAll and "übernommen (alte Reserves ersetzt)" or "zusammengeführt"))
     return true
 end

@@ -208,6 +208,55 @@ function UI.Confirm(text, onAccept, condition)
     confirmAction = onAccept -- nach Show: OnHide eines alten Dialogs räumt sonst auf
 end
 
+-- Eingabedialog: ein Textfeld, onAccept(text) bei „OK“ oder Enter
+local promptFrame = CreateFrame("Frame", nil, UIParent, "BasicFrameTemplateWithInset")
+promptFrame:SetSize(380, 150)
+promptFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
+promptFrame:SetFrameStrata("FULLSCREEN_DIALOG")
+promptFrame:SetToplevel(true)
+promptFrame:EnableMouse(true)
+promptFrame.TitleText:SetText(ns.TITLE)
+promptFrame:Hide()
+
+local promptText = promptFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+promptText:SetPoint("TOPLEFT", promptFrame, "TOPLEFT", 16, -34)
+promptText:SetPoint("RIGHT", promptFrame, "RIGHT", -16, 0)
+promptText:SetJustifyH("CENTER")
+
+local promptBox = CreateFrame("EditBox", nil, promptFrame, "InputBoxTemplate")
+promptBox:SetSize(300, 22)
+promptBox:SetPoint("TOP", promptText, "BOTTOM", 0, -12)
+promptBox:SetAutoFocus(true)
+promptBox:SetMaxLetters(30)
+
+local promptAction
+local function acceptPrompt()
+    local action = promptAction
+    promptAction = nil
+    local text = promptBox:GetText()
+    promptFrame:Hide()
+    if action then action(text) end
+end
+promptBox:SetScript("OnEnterPressed", acceptPrompt)
+promptBox:SetScript("OnEscapePressed", function() promptFrame:Hide() end)
+
+local promptOK = UI.CreateButton(promptFrame, "OK", 120, acceptPrompt)
+promptOK:SetPoint("BOTTOMRIGHT", promptFrame, "BOTTOM", -6, 12)
+local promptCancel = UI.CreateButton(promptFrame, "Abbrechen", 120, function() promptFrame:Hide() end)
+promptCancel:SetPoint("BOTTOMLEFT", promptFrame, "BOTTOM", 6, 12)
+promptFrame:SetScript("OnHide", function()
+    promptAction = nil
+end)
+
+function UI.Prompt(text, default, onAccept)
+    promptText:SetText(text)
+    promptBox:SetText(default or "")
+    promptFrame:Show()
+    promptAction = onAccept
+    promptBox:SetFocus()
+    promptBox:HighlightText()
+end
+
 -- Titel einer Sitzung: Name, bei eigenem Namen zusätzlich die Instanz
 function UI.SessionTitle(s)
     local instance = s.instanceName or "keine Instanz"

@@ -51,7 +51,7 @@ local function createRow(index)
     row.roll = UI.CreateButton(row, "Würfeln", 70, function(self)
         local item = self:GetParent().item
         if item then
-            ns.Rolls:Start(item.itemID, item.link, nil, nil, nil, item.lootKey)
+            ns.Rolls:StartChecked(item.itemID, item.link, item.lootKey)
         end
     end)
     row.roll:SetHeight(20)
@@ -103,6 +103,11 @@ local function refresh()
                 ns.Rolls.LABEL[award.category] or award.category or "?", award.roll or 0))
             row.bg:SetColorTexture(0.1, 0.6, 0.1, 0.2)
             row.roll:SetText("Erneut")
+        elseif ns.Session:GetHardReserve(item.itemID) then
+            local hr = ns.Session:GetHardReserve(item.itemID)
+            row.holders:SetText("|cffff5050HR: " .. (hr.note ~= "" and hr.note or "fest vergeben") .. "|r")
+            row.bg:SetColorTexture(0.6, 0.1, 0.1, 0.2)
+            row.roll:SetText("Würfeln")
         else
             local holders, total = UI.FormatHolders(item.itemID)
             if holders then
