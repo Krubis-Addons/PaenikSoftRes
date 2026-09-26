@@ -10,7 +10,7 @@
 | 7 | softres.it-Import | `Import.lua` + `UI/ImportDialog.lua`: CSV-Export von softres.it, Vorschau, „Ersetzen“ oder „Zusammenführen“ (Mischbetrieb), Quelle `softres` (Übersicht hellblau). |
 | 8 | Feinschliff | Bestätigungsdialoge (`UI.Confirm`), Optionen-Seite im Blizzard-Menü (`UI/Options.lua`), Debug-Log und Testbefehle standardmäßig aus, Gargul-Export-Import (LibDeflate in `Libs/`), Forever-Dungeons als Testdaten (`Data/Instances/ForeverDungeons.lua`), Gesamt-Review mit `wow-reviewer` und dessen Befunde behoben. |
 
-Status: Iterationen 1–8 umgesetzt, dazu Anmeldeschluss, mehrere Sitzungen und Gilden-Synchronisation (Anmeldung ohne Gruppe), Weitergabe von Anmeldungen über die Gilde, ID fortführen (gelegte Bosse) und Hard Reserves, Gargul-Würfelfenster für Raider ohne dieses Addon.
+Status: Iterationen 1–8 umgesetzt, dazu Anmeldeschluss, mehrere Sitzungen und Gilden-Synchronisation (Anmeldung ohne Gruppe), Weitergabe von Anmeldungen über die Gilde, ID fortführen (gelegte Bosse) und Hard Reserves, Gargul-Würfelfenster für Raider ohne dieses Addon, Besitz-Anzeige in der SR-Auswahl.
 
 Offen / später:
 - Encounter-Journal-Provider (`Data/EJProvider.lua`), sobald Blizzard das EJ in Forever aktiviert: Loot nachladen (`EJ_LOOT_DATA_RECIEVED` → Anzeige-Cache leeren), `EJ_ResetLootFilter()` vor dem Auslesen, Instanzliste cachen.
@@ -19,6 +19,5 @@ Offen / später:
 - Tests in einer Gruppe mit Gargul-Nutzern: Gargul-Würfelfenster öffnet/schließt sich, Würfe kommen an.
 
 Ideen (später umsetzen):
-- **Besitz anzeigen:** In der SR-Auswahl markieren, wenn man das Item bereits besitzt (Taschen, Bank, angelegt).
 - **Wunschliste:** Eigene Wunschliste pro Instanz führen und in der SR-Auswahl hervorheben.
 - **Automatische Sitzungen:** Für regelmäßige Raids (z. B. jeden Dienstag MC) automatisch Sitzungen mit festen Regeln und Anmeldeschluss anlegen.

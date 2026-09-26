@@ -21,6 +21,7 @@ Data\Instances\ForeverDungeons.lua
 Comm.lua
 Rolls.lua
 GargulCompat.lua
+Owned.lua
 Import.lua
 GuildSync.lua
 UI\MainFrame.lua

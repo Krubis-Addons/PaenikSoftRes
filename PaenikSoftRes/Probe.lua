@@ -97,6 +97,11 @@ function ns.RunProbe()
     end
     ns.Debug("Probe", "Instanzen aus dem EJ-Provider:", ejCount)
     probeItems()
+    -- Besitz-Anzeige: zählt GetItemCount die Bank auch bei geschlossener Bank? (Ruhestein 6948 als Beispiel)
+    ns.Debug("Probe", "GetItemCount Ruhestein – Taschen:", C_Item.GetItemCount(6948, false),
+        "mit Bank:", C_Item.GetItemCount(6948, true), "| angelegt-Prüfung:", type(C_Item.IsEquippedItem))
+    local owned, banked = ns.Owned:Summary()
+    ns.Print(string.format("Besitz: %d Loot-Items im Besitz, davon %d in der Bank gemerkt", owned, banked))
     if #missing == 0 then
         ns.Print("Probe OK, alle APIs vorhanden.")
     else

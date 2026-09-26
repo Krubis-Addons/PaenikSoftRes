@@ -10,6 +10,7 @@ local SIDEBAR_WIDTH = 190
 local ALL_BOSSES = 0
 local ALL_BOSSES_ICON = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull"
 local PORTRAIT_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+local OWNED_TEXT = "|cff66ccffIm Besitz|r"
 
 local selectedBoss = ALL_BOSSES
 local lastInstanceKey
@@ -101,6 +102,8 @@ local function toggleItem(itemID, addAnother)
 
     if position and not addAnother then
         table.remove(list, position)
+        submit(s, list)
+        return
     elseif #list < s.maxReserves then
         table.insert(list, itemID)
     elseif s.maxReserves == 1 then
@@ -109,7 +112,11 @@ local function toggleItem(itemID, addAnother)
         ns.Print("Limit erreicht (" .. s.maxReserves .. "). Erst ein Item entfernen.")
         return
     end
-    submit(s, list)
+    -- Hinzufügen: bei einem Item im Besitz erst nachfragen
+    local places = not position and ns.Owned:PlacesText(itemID)
+    local name = UI.GetItemDisplay(itemID)
+    UI.Confirm(string.format("Du besitzt %s bereits (%s).\nTrotzdem reservieren?", name, places or ""),
+        function() submit(s, list) end, places and true or false)
 end
 
 local function removeAt(index)
@@ -138,11 +145,15 @@ end
 local function showItemTooltip(owner, itemID, hint)
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
     GameTooltip:SetItemByID(itemID)
-    if hint then
+    local places = ns.Owned:PlacesText(itemID)
+    if hint or places then
         GameTooltip:AddLine(" ")
-        for _, line in ipairs(hint) do
-            GameTooltip:AddLine(line, 0.6, 0.8, 1)
-        end
+    end
+    if places then
+        GameTooltip:AddLine("Bereits im Besitz: " .. places, 0.4, 0.8, 1)
+    end
+    for _, line in ipairs(hint or {}) do
+        GameTooltip:AddLine(line, 0.6, 0.8, 1)
     end
     GameTooltip:Show()
 end
@@ -317,7 +328,8 @@ local function refreshMyReserves(s, kind)
             row.icon:SetTexture(icon)
             row.icon:Show()
             row.name:SetText(name)
-            row.boss:SetText("|cff999999" .. (bossNameForItem(s, itemID) or "") .. "|r")
+            local boss = "|cff999999" .. (bossNameForItem(s, itemID) or "") .. "|r"
+            row.boss:SetText(ns.Owned:Has(itemID) and (OWNED_TEXT .. "  " .. boss) or boss)
             row.remove:Show()
             row.remove:SetEnabled(not ns.Session:IsLocked(s))
             row.bg:SetColorTexture(0.1, 0.6, 0.1, 0.2)
@@ -435,6 +447,9 @@ local function initItemRow(row, data)
     if data.killed then
         table.insert(info, "|cff808080Boss gelegt|r")
     end
+    if data.owned then
+        table.insert(info, OWNED_TEXT)
+    end
     if data.mine > 0 then
         table.insert(info, data.mine > 1 and ("|cff40ff40Reserviert x" .. data.mine .. "|r") or "|cff40ff40Reserviert|r")
     end
@@ -520,6 +535,7 @@ local function buildItemElements(s, mineCount)
                         others = otherCount[itemID] or 0,
                         killed = killedOnly[itemID] == true,
                         hardReserve = ns.Session:GetHardReserve(itemID, s),
+                        owned = ns.Owned:Has(itemID),
                     }
                     index[itemID] = element
                     table.insert(elements, element)
@@ -598,4 +614,5 @@ local refreshIfShown = UI.Debounce(function()
 end)
 ns:On("SESSION_CHANGED", refreshIfShown)
 ns:On("LOOT_ITEMS_CHANGED", refreshIfShown)
+ns:On("OWNED_CHANGED", refreshIfShown)
 ns:On("ROLE_CHANGED", refreshIfShown)
