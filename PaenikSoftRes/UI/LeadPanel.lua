@@ -155,6 +155,11 @@ local resetButton = UI.CreateButton(rules, "Sitzung verwerfen", 140, function()
 end)
 resetButton:SetPoint("LEFT", restartButton, "RIGHT", 8, 0)
 
+local importButton = UI.CreateButton(rules, "softres.it-Import", 150, function()
+    ns.ShowImportDialog()
+end)
+importButton:SetPoint("LEFT", resetButton, "RIGHT", 8, 0)
+
 local function refresh()
     local s = ns.Session:Get()
     local isOwner = ns.Session:IsOwner()

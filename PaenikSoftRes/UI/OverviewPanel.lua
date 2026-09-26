@@ -77,20 +77,26 @@ local function itemOrder(s)
     return order
 end
 
+local IMPORT_COLOR = "ff80c8ff" -- Reserves aus softres.it
+
 local function buildElements(s)
     local byItem = {}
-    local playerCount, reserveCount = 0, 0
+    local playerCount, reserveCount, importedCount = 0, 0, 0
     for player, list in pairs(s.reserves) do
         playerCount = playerCount + 1
         for _, entry in ipairs(list) do
             reserveCount = reserveCount + 1
             local item = byItem[entry.itemID]
             if not item then
-                item = { itemID = entry.itemID, total = 0, names = {} }
+                item = { itemID = entry.itemID, total = 0, names = {}, imported = {} }
                 byItem[entry.itemID] = item
             end
             item.total = item.total + 1
             item.names[player] = (item.names[player] or 0) + 1
+            if entry.source == "softres" then
+                item.imported[player] = true
+                importedCount = importedCount + 1
+            end
         end
     end
 
@@ -99,9 +105,13 @@ local function buildElements(s)
         local names = {}
         for player, count in pairs(item.names) do
             local short = UI.ShortName(player)
-            table.insert(names, count > 1 and (short .. " x" .. count) or short)
+            local text = count > 1 and (short .. " x" .. count) or short
+            table.insert(names, { sort = short, text = item.imported[player] and ("|c" .. IMPORT_COLOR .. text .. "|r") or text })
         end
-        table.sort(names)
+        table.sort(names, function(a, b) return a.sort < b.sort end)
+        for i, entry in ipairs(names) do
+            names[i] = entry.text
+        end
         item.players = table.concat(names, ", ")
         table.insert(elements, item)
     end
@@ -111,7 +121,7 @@ local function buildElements(s)
         if oa ~= ob then return oa < ob end
         return a.itemID < b.itemID
     end)
-    return elements, playerCount, reserveCount
+    return elements, playerCount, reserveCount, importedCount
 end
 
 -- Verlauf: vergebene Items, neueste zuerst
@@ -157,9 +167,12 @@ function refreshList()
         scrollBox:SetDataProvider(CreateDataProvider(elements), ScrollBoxConstants.RetainScrollPosition)
         return
     end
-    local elements, playerCount, reserveCount = buildElements(s)
-    header:SetText(string.format("%s – %d Spieler, %d Reserves%s",
-        s.instanceName or "keine Instanz", playerCount, reserveCount, s.locked and " – |cffff6060gesperrt|r" or ""))
+    local elements, playerCount, reserveCount, importedCount = buildElements(s)
+    local importText = importedCount > 0
+        and string.format(" (|c%s%d aus softres.it|r)", IMPORT_COLOR, importedCount) or ""
+    header:SetText(string.format("%s – %d Spieler, %d Reserves%s%s",
+        s.instanceName or "keine Instanz", playerCount, reserveCount, importText,
+        s.locked and " – |cffff6060gesperrt|r" or ""))
     scrollBox:SetShown(#elements > 0)
     emptyText:SetShown(#elements == 0)
     emptyText:SetText("Noch keine Reserves.")

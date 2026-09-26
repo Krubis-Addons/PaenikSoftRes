@@ -68,42 +68,6 @@ local function getRollPattern()
     return rollPattern
 end
 
--- Name aus der Würfelnachricht einem Gruppenmitglied zuordnen.
--- Die Nachricht kann "Vorname", "Vorname Nachname" oder "Name-Realm" enthalten
--- (Forever-Nachnamen, Anzeige ist einstellbar). Nur eindeutige Treffer zählen.
-local function resolveRollName(name)
-    local units = { "player" }
-    local prefix, count
-    if IsInRaid and IsInRaid() then
-        prefix, count = "raid", 40
-    elseif IsInGroup and IsInGroup() then
-        prefix, count = "party", 4
-    end
-    if prefix then
-        for i = 1, count do
-            if UnitExists(prefix .. i) and not UnitIsUnit(prefix .. i, "player") then
-                table.insert(units, prefix .. i)
-            end
-        end
-    end
-    local found
-    for _, unit in ipairs(units) do
-        local key = ns.FullName(unit)
-        if key then
-            local base = key:match("^(.*)%-[^%-]+$") or key -- ohne Realm
-            local first = UnitName(unit)
-            if name == key or name == base or name == first then
-                if found and found ~= key then
-                    ns.Debug("Rolls", "Name mehrdeutig:", name, found, key)
-                    return nil
-                end
-                found = key
-            end
-        end
-    end
-    return found
-end
-
 local function holderSet(itemID)
     local set = {}
     for player in pairs(ns.Session:GetReservesForItem(itemID)) do
@@ -519,7 +483,7 @@ function ns:CHAT_MSG_SYSTEM(text)
     if not name then return end
     ns.Debug("Rolls", "Würfelnachricht:", text)
     roll, low, high = tonumber(roll), tonumber(low), tonumber(high)
-    local player = resolveRollName(name)
+    local player = ns.ResolvePlayerName(name)
     if not player then
         ns.Debug("Rolls", "Wurf ignoriert, nicht in der Gruppe oder mehrdeutig:", name)
         return

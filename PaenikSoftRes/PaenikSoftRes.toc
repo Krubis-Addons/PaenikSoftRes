@@ -15,6 +15,7 @@ Data\EJProvider.lua
 Data\Instances\MoltenCore.lua
 Comm.lua
 Rolls.lua
+Import.lua
 UI\MainFrame.lua
 UI\MinimapButton.lua
 UI\RaiderPanel.lua
@@ -22,5 +23,6 @@ UI\LeadPanel.lua
 UI\OverviewPanel.lua
 UI\LootPanel.lua
 UI\RollFrames.lua
+UI\ImportDialog.lua
 UI\Tooltip.lua
 Probe.lua

@@ -119,6 +119,44 @@ function ns.UnitForName(fullName)
     end
 end
 
+-- Einen Namen (z. B. aus einer Würfelnachricht oder einem softres.it-Import) einem
+-- Gruppenmitglied zuordnen. Erlaubt "Vorname", "Vorname Nachname" oder "Name-Realm"
+-- (Forever-Nachnamen), ohne Groß-/Kleinschreibung. Nur eindeutige Treffer zählen.
+function ns.ResolvePlayerName(name)
+    if not name or name == "" then return nil end
+    local wanted = name:lower()
+    local units = { "player" }
+    local prefix, count
+    if IsInRaid and IsInRaid() then
+        prefix, count = "raid", 40
+    elseif IsInGroup and IsInGroup() then
+        prefix, count = "party", 4
+    end
+    if prefix then
+        for i = 1, count do
+            if UnitExists(prefix .. i) and not UnitIsUnit(prefix .. i, "player") then
+                table.insert(units, prefix .. i)
+            end
+        end
+    end
+    local found
+    for _, unit in ipairs(units) do
+        local key = ns.FullName(unit)
+        if key then
+            local base = key:match("^(.*)%-[^%-]+$") or key -- ohne Realm
+            local first = UnitName(unit)
+            if wanted == key:lower() or wanted == base:lower() or wanted == (first or ""):lower() then
+                if found and found ~= key then
+                    ns.Debug("Core", "Name mehrdeutig:", name, found, key)
+                    return nil
+                end
+                found = key
+            end
+        end
+    end
+    return found
+end
+
 -- Chat-Kanal der aktuellen Gruppe (nil ohne Gruppe)
 function ns.GroupChannel()
     if IsInRaid and IsInRaid() then

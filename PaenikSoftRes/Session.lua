@@ -230,6 +230,32 @@ function Session:SetPlayerReserves(player, itemIDs, source)
     return true
 end
 
+-- Import aus einer externen Quelle (z. B. softres.it) in die eigene Sitzung.
+-- reserves = { ["Name-Realm"] = { itemID, ... } }; replaceAll = true verwirft alle bisherigen Reserves,
+-- sonst werden nur die Listen der importierten Spieler ersetzt (Mischbetrieb mit Ingame-Reserves).
+-- Limits und Instanz werden bewusst nicht geprüft: die externe Quelle hat ihre eigenen Regeln.
+function Session:ImportReserves(reserves, source, replaceAll)
+    local s = self:Get()
+    if not s then return false, "Keine Sitzung" end
+    if not self:IsOwner() then return false, "Sitzung gehört " .. tostring(s.leader) end
+    if replaceAll then
+        wipe(s.reserves)
+    end
+    local players, count = 0, 0
+    for player, itemIDs in pairs(reserves) do
+        local list = {}
+        for i, itemID in ipairs(itemIDs) do
+            list[i] = { itemID = itemID, source = source }
+        end
+        s.reserves[player] = #list > 0 and list or nil
+        players = players + 1
+        count = count + #list
+    end
+    changed("Import", source, players, "Spieler", count, "Reserves", replaceAll and "ersetzt" or "zusammengeführt")
+    ns:Fire("SESSION_FULL_SYNC")
+    return true, players, count
+end
+
 -- Übernahme der Regeln vom Raidlead (Spiegel der Master-Liste).
 function Session:ApplyRemoteSession(info)
     local s = self:Get()

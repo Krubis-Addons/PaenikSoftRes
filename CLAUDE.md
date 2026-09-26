@@ -37,4 +37,5 @@ Es gibt ein Oberfläche beim Looten mit den Soft Reserve Informationen pro Item.
 - SavedVariables: laut forever-addon-kit wurden sie in der Beta nie geladen. Am 2026-09-26 war die Sitzung nach dem Neustart aber vorhanden (Log: „Sitzung vorhanden: true“), das Laden funktioniert also inzwischen. Kein Workaround nötig.
 - Minimap-Button ohne Bibliothek (`UI/MinimapButton.lua`), Position in `db.minimap.angle`; Icon `ns.UI.ICON` (Kleiner brauner Beutel, ItemID 4496) auch als Fensterporträt.
 - Würfelrunden: Protokoll im Kopf von `Rolls.lua` (RS/RD/RE/RC über `Comm:RegisterHandler`). Kategorie ergibt sich aus dem Würfelbereich (SR/MS /roll, OS /roll 50, Transmog /roll 25) – funktioniert auch ohne Addon; RD meldet nur „Passen“.
+- Import: `Import.ParseSoftresCSV` (softres.it-CSV) → `Session:ImportReserves(reserves, "softres", replaceAll)`; Limits/Instanz werden beim Import bewusst nicht geprüft. Namenszuordnung für Import und Würfe: `ns.ResolvePlayerName` (Core.lua).
 - Testhilfen: `/paeniksoftres fake` trägt 5 Testspieler ein (nur ohne Gruppe, `source = "fake"`, wird nie gesendet); `/paeniksoftres loottest` zeigt das Loot-Panel mit vorhandenen Reserves ohne Leiche.
