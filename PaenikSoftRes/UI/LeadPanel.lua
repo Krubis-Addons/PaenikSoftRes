@@ -116,15 +116,105 @@ end)
 local lockText = UI.CreateText(rules, duplicatesCheck, -14, "GameFontNormal")
 
 local lockButton = UI.CreateButton(rules, "Sperren", 140, function()
-    local s = ns.Session:Get()
-    if s then
-        ns.Session:SetLocked(not s.locked)
+    if ns.Session:Get() then
+        ns.Session:SetLocked(not ns.Session:IsLocked())
     end
 end)
 lockButton:SetPoint("TOPLEFT", lockText, "BOTTOMLEFT", 0, -8)
 
+-- Anmeldeschluss: optionaler Zeitpunkt, danach ist die Sitzung automatisch geschlossen
+local DEFAULT_HOUR, DEFAULT_MIN = 20, 0
+
+local deadlineLabel = createLabel("Anmeldeschluss:", lockButton, -18)
+
+local dayDropdown = CreateFrame("DropdownButton", nil, rules, "WowStyle1DropdownTemplate")
+dayDropdown:SetWidth(170)
+dayDropdown:SetPoint("LEFT", deadlineLabel, "RIGHT", 0, 0)
+dayDropdown:SetDefaultText("Kein Anmeldeschluss")
+
+local timeDropdown = CreateFrame("DropdownButton", nil, rules, "WowStyle1DropdownTemplate")
+timeDropdown:SetWidth(90)
+timeDropdown:SetPoint("LEFT", dayDropdown, "RIGHT", 8, 0)
+timeDropdown:SetDefaultText("--:--")
+
+-- Zeitstempel aus lokalem Tag ("YYYY-MM-DD") und Uhrzeit
+local function makeTimestamp(dayKey, hour, minute)
+    local year, month, day = dayKey:match("^(%d+)-(%d+)-(%d+)$")
+    return time({ year = tonumber(year), month = tonumber(month), day = tonumber(day),
+        hour = hour, min = minute, sec = 0 })
+end
+
+local function currentDeadline()
+    local s = ns.Session:Get()
+    return s and s.deadline
+end
+
+local function applyDeadline(timestamp)
+    if timestamp <= GetServerTime() then
+        ns.Print("Der Anmeldeschluss liegt in der Vergangenheit.")
+        return
+    end
+    ns.Session:SetRules({ deadline = timestamp })
+end
+
+local function isDaySelected(dayKey)
+    local deadline = currentDeadline()
+    if dayKey == "none" then
+        return deadline == nil
+    end
+    return deadline ~= nil and date("%Y-%m-%d", deadline) == dayKey
+end
+
+local function selectDay(dayKey)
+    if dayKey == "none" then
+        ns.Session:SetRules({ deadline = 0 })
+        return
+    end
+    local deadline = currentDeadline()
+    local hour = deadline and tonumber(date("%H", deadline)) or DEFAULT_HOUR
+    local minute = deadline and tonumber(date("%M", deadline)) or DEFAULT_MIN
+    applyDeadline(makeTimestamp(dayKey, hour, minute))
+end
+
+dayDropdown:SetupMenu(function(_, root)
+    root:CreateRadio("Kein Anmeldeschluss", isDaySelected, selectDay, "none")
+    local year, month, day = tonumber(date("%Y")), tonumber(date("%m")), tonumber(date("%d"))
+    for offset = 0, 13 do
+        -- time() normalisiert Tage über das Monatsende hinaus
+        local timestamp = time({ year = year, month = month, day = day + offset, hour = 12 })
+        local prefix = offset == 0 and "Heute, " or (offset == 1 and "Morgen, " or "")
+        root:CreateRadio(prefix .. UI.FormatDate(timestamp, false), isDaySelected, selectDay,
+            date("%Y-%m-%d", timestamp))
+    end
+end)
+
+local function isTimeSelected(minutes)
+    local deadline = currentDeadline()
+    return deadline ~= nil and tonumber(date("%H", deadline)) * 60 + tonumber(date("%M", deadline)) == minutes
+end
+
+local function selectTime(minutes)
+    local hour, minute = math.floor(minutes / 60), minutes % 60
+    local deadline = currentDeadline()
+    local dayKey = deadline and date("%Y-%m-%d", deadline) or date("%Y-%m-%d")
+    local timestamp = makeTimestamp(dayKey, hour, minute)
+    if not deadline and timestamp <= GetServerTime() then
+        -- noch kein Tag gewählt und die Uhrzeit ist heute schon vorbei: morgen
+        timestamp = makeTimestamp(date("%Y-%m-%d", timestamp + 24 * 60 * 60), hour, minute)
+    end
+    applyDeadline(timestamp)
+end
+
+timeDropdown:SetupMenu(function(_, root)
+    root:SetScrollMode(260)
+    for minutes = 0, 23 * 60 + 30, 30 do
+        root:CreateRadio(string.format("%02d:%02d", math.floor(minutes / 60), minutes % 60),
+            isTimeSelected, selectTime, minutes)
+    end
+end)
+
 -- Würfelzeit: Zeitfenster für Würfelrunden (persönliche Einstellung des Raidleads, auch in den Optionen)
-local durationLabel = createLabel("Würfelzeit:", lockButton, -18)
+local durationLabel = createLabel("Würfelzeit:", deadlineLabel, -22)
 
 local durationDropdown = CreateFrame("DropdownButton", nil, rules, "WowStyle1DropdownTemplate")
 durationDropdown:SetWidth(160)
@@ -195,21 +285,26 @@ local function refresh()
         instanceInfo:SetText("Noch keine Instanz gewählt")
     end
 
-    local editable = not s.locked
+    local locked = ns.Session:IsLocked()
+    local editable = not locked
     instanceDropdown:SetEnabled(editable)
     maxDropdown:SetEnabled(editable)
     duplicatesCheck:SetEnabled(editable)
+    dayDropdown:SetEnabled(editable)
+    timeDropdown:SetEnabled(editable)
     duplicatesCheck:SetChecked(s.allowDuplicates)
     -- Auswahltext neu auswerten; kein GenerateMenu, da refresh auch aus einer Menü-Antwort kommt
     instanceDropdown:SignalUpdate()
     maxDropdown:SignalUpdate()
     durationDropdown:SignalUpdate()
+    dayDropdown:SignalUpdate()
+    timeDropdown:SignalUpdate()
 
-    if s.locked then
-        lockText:SetText("Status: |cffff6060gesperrt|r – keine Änderungen an Regeln und Reserves")
+    if locked then
+        lockText:SetText("Status: " .. UI.LockStateText(s) .. " – keine Änderungen an Regeln und Reserves")
         lockButton:SetText("Öffnen")
     else
-        lockText:SetText("Status: |cff60ff60offen|r – Raider können reservieren")
+        lockText:SetText("Status: " .. UI.LockStateText(s) .. " – Raider können reservieren")
         lockButton:SetText("Sperren")
     end
 end

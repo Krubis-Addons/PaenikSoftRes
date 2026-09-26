@@ -43,8 +43,8 @@ end
 local function canEdit()
     local s = ns.Session:Get()
     if not s then return false end
-    if s.locked then
-        ns.Print("Die Sitzung ist gesperrt.")
+    if ns.Session:IsLocked() then
+        ns.Print(s.locked and "Die Sitzung ist gesperrt." or "Der Anmeldeschluss ist erreicht.")
         return false
     end
     return true
@@ -221,8 +221,8 @@ local function refreshMyReserves(s)
     local text = string.format("Meine Reserves (%d/%d)", #list, s.maxReserves)
     if ns.Comm:IsRequestPending() then
         text = text .. "  |cffffd100warte auf Raidlead …|r"
-    elseif s.locked then
-        text = text .. "  |cffff6060gesperrt|r"
+    elseif ns.Session:IsLocked() or s.deadline then
+        text = text .. "  " .. UI.LockStateText(s)
     end
     myHeader:SetText(text)
 
@@ -243,7 +243,7 @@ local function refreshMyReserves(s)
             row.name:SetText(name)
             row.boss:SetText("|cff999999" .. (bossNameForItem(s, itemID) or "") .. "|r")
             row.remove:Show()
-            row.remove:SetEnabled(not s.locked)
+            row.remove:SetEnabled(not ns.Session:IsLocked())
             row.bg:SetColorTexture(0.1, 0.6, 0.1, 0.2)
         else
             row.icon:Hide()
@@ -406,7 +406,7 @@ function refreshList()
         emptyText:Show()
         return
     end
-    local state = s.locked and "|cffff6060gesperrt|r" or "|cff60ff60offen|r"
+    local state = UI.LockStateText(s)
     statusText:SetText(string.format("%s – Raidlead %s – %s",
         s.instanceName or "keine Instanz", UI.ShortName(s.leader or "?"), state))
     if not hasList then

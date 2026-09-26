@@ -3,7 +3,7 @@
 -- Raider spiegeln sie und schicken Wünsche per Whisper an ihn.
 --
 -- Nachrichten (Felder getrennt durch "^", Version zuerst):
---   1^R^sid^leader^instKey^instName^max^dup^locked   Lead → Gruppe: Regeln
+--   1^R^sid^leader^instKey^instName^max^dup^locked^deadline   Lead → Gruppe: Regeln (deadline 0 = keiner)
 --   1^F^sid                                           Lead → Gruppe: voller Stand folgt (Reserves leeren)
 --   1^P^sid^Name-Realm=id,id;Name-Realm=...           Lead → Gruppe: Reserves (mehrere Spieler)
 --   1^E^sid                                           Lead → Gruppe: Sitzung beendet
@@ -93,7 +93,7 @@ local function sendRules()
     local channel = groupChannel()
     if not s or not channel then return end
     send(channel, nil, "R", s.id, s.leader, s.instanceKey or "", sanitize(s.instanceName),
-        s.maxReserves, s.allowDuplicates and 1 or 0, s.locked and 1 or 0)
+        s.maxReserves, s.allowDuplicates and 1 or 0, s.locked and 1 or 0, s.deadline or 0)
 end
 
 local function isFakePlayer(s, player)
@@ -321,6 +321,7 @@ function handlers.R(sender, f)
         maxReserves = tonumber(f[7]) or 1,
         allowDuplicates = f[8] == "1",
         locked = f[9] == "1",
+        deadline = tonumber(f[10]) ~= 0 and tonumber(f[10]) or nil,
     })
 end
 

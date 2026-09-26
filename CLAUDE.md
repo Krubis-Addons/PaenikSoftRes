@@ -44,3 +44,4 @@ Es gibt ein Oberfläche beim Looten mit den Soft Reserve Informationen pro Item.
 - Rückfragen über `UI.Confirm(text, onAccept, condition)` (eigener Frame, keine `StaticPopupDialogs`).
 - Bibliotheken in `Libs/` (unverändert, von luacheck ausgenommen): LibStub, LibDeflate (zlib-Lizenz, für den Gargul-Export von softres.it).
 - Testdaten: `Data/Instances/ForeverDungeons.lua` (7 Forever-Beta-Dungeons, aus ForeverDungeonJournal v1.1 bzw. dessen SOURCES.txt).
+- Anmeldeschluss: `session.deadline` (Zeitstempel, `GetServerTime`/`time()`). `Session:IsLocked()` = manuell gesperrt ODER Schluss erreicht – immer statt `s.locked` prüfen. Beim Raidlead sperrt ein Timer die Sitzung zum Schluss und sagt es an; „Öffnen“ danach entfernt den Schluss. Übertragen als 10. Feld der `R`-Nachricht.

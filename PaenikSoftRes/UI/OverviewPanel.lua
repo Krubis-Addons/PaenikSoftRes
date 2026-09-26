@@ -172,7 +172,7 @@ function refreshList()
         and string.format(" (|c%s%d aus softres.it|r)", IMPORT_COLOR, importedCount) or ""
     header:SetText(string.format("%s – %d Spieler, %d Reserves%s%s",
         s.instanceName or "keine Instanz", playerCount, reserveCount, importText,
-        s.locked and " – |cffff6060gesperrt|r" or ""))
+        (ns.Session:IsLocked() or s.deadline) and (" – " .. UI.LockStateText(s)) or ""))
     scrollBox:SetShown(#elements > 0)
     emptyText:SetShown(#elements == 0)
     emptyText:SetText("Noch keine Reserves.")

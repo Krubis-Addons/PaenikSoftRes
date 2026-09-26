@@ -4,6 +4,7 @@
 --     instanceKey,    -- "providerID:key", siehe Data/LootData.lua
 --     instanceName,
 --     maxReserves, allowDuplicates, locked,
+--     deadline,       -- optionaler Anmeldeschluss (GetServerTime-Zeitstempel), danach gesperrt
 --     reserves = { ["Name-Realm"] = { { itemID = 123, source = "ingame" }, ... } },
 -- }
 local _, ns = ...
@@ -19,6 +20,7 @@ local RULE_KEYS = {
     maxReserves = true,
     allowDuplicates = true,
     locked = true,
+    deadline = true, -- 0 entfernt den Anmeldeschluss
 }
 
 -- Ereignisse:
@@ -47,6 +49,13 @@ function Session:IsMaster()
     return self:IsOwner() and ns.Roles:IsLead()
 end
 
+-- Gesperrt: manuell gesperrt oder Anmeldeschluss erreicht (gilt auch bei Raidern ohne Nachricht vom Lead)
+function Session:IsLocked()
+    local s = self:Get()
+    if not s then return false end
+    return s.locked == true or (s.deadline ~= nil and GetServerTime() >= s.deadline)
+end
+
 -- Neuer Gruppenleiter übernimmt die (gespiegelte) Sitzung des bisherigen Leads.
 function Session:TakeOver(leader)
     local old = self:Get()
@@ -64,6 +73,7 @@ function Session:TakeOver(leader)
         maxReserves = old.maxReserves or 1,
         allowDuplicates = old.allowDuplicates,
         locked = old.locked,
+        deadline = old.deadline,
         reserves = reserves,
         history = old.history and CopyTable(old.history) or nil,
     }
@@ -120,6 +130,9 @@ function Session:SetRules(rules)
     local parts = {}
     for key, value in pairs(rules) do
         if RULE_KEYS[key] then
+            if key == "deadline" and value == 0 then
+                value = nil
+            end
             s[key] = value
             table.insert(parts, key .. "=" .. tostring(value))
         end
@@ -130,8 +143,50 @@ function Session:SetRules(rules)
 end
 
 function Session:SetLocked(locked)
+    local s = self:Get()
+    if not locked and s and s.deadline and GetServerTime() >= s.deadline then
+        -- Wieder öffnen nach dem Anmeldeschluss: Schluss entfernen, sonst sperrt er sofort erneut
+        return self:SetRules({ locked = false, deadline = 0 })
+    end
     return self:SetRules({ locked = locked and true or false })
 end
+
+-- Anmeldeschluss überwachen: beim Raidlead die Sitzung sperren (und an die Gruppe verteilen),
+-- bei allen die Anzeige aktualisieren.
+local deadlineTimer
+local deadlineFor -- Zeitstempel, für den der Timer läuft
+
+local function onDeadline()
+    deadlineTimer, deadlineFor = nil, nil
+    local s = Session:Get()
+    if not s or not s.deadline or GetServerTime() < s.deadline then return end
+    if Session:IsOwner() and not s.locked then
+        Session:SetRules({ locked = true })
+        ns.Print("Anmeldeschluss erreicht – die Soft Reserves sind geschlossen.")
+        if ns.GroupChannel() then
+            ns.SendGroupChat("Soft Reserves sind geschlossen (Anmeldeschluss erreicht).")
+        end
+    else
+        ns:Fire("SESSION_CHANGED")
+    end
+end
+
+local function scheduleDeadline()
+    local s = Session:Get()
+    local deadline = s and not s.locked and s.deadline or nil
+    if deadline == deadlineFor then return end
+    if deadlineTimer then
+        deadlineTimer:Cancel()
+        deadlineTimer = nil
+    end
+    deadlineFor = deadline
+    if deadline then
+        deadlineTimer = C_Timer.NewTimer(math.max(0, deadline - GetServerTime()) + 1, onDeadline)
+    end
+end
+
+ns:On("SESSION_CHANGED", scheduleDeadline)
+ns:On("LOGIN", scheduleDeadline)
 
 function Session:GetReserves(player)
     local s = self:Get()
@@ -187,7 +242,7 @@ end
 function Session:ValidateReserves(itemIDs, player)
     local s = self:Get()
     if not s then return false, "Keine Sitzung" end
-    if s.locked then return false, "Sitzung ist gesperrt" end
+    if self:IsLocked() then return false, "Sitzung ist gesperrt" end
     if not s.instanceKey then return false, "Keine Instanz gewählt" end
     local current = player and self:CountReserves(player) or 0
     if #itemIDs > s.maxReserves and #itemIDs >= current then
@@ -333,6 +388,7 @@ function Session:ApplyRemoteSession(info)
     s.maxReserves = info.maxReserves
     s.allowDuplicates = info.allowDuplicates
     s.locked = info.locked
+    s.deadline = info.deadline
     changed("Sitzung vom Raidlead übernommen", info.id, info.leader)
 end
 

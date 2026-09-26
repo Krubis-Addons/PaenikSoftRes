@@ -214,6 +214,26 @@ function UI.SessionHasData()
     return s ~= nil and (next(s.reserves) ~= nil or (s.history ~= nil and #s.history > 0))
 end
 
+-- Zeitpunkt als "Sa, 27.09. 20:00" (Wochentage deutsch, date() liefert sie nur englisch)
+local WEEKDAYS = { "So", "Mo", "Di", "Mi", "Do", "Fr", "Sa" }
+
+function UI.FormatDate(timestamp, withTime)
+    local weekday = WEEKDAYS[tonumber(date("%w", timestamp)) + 1]
+    return weekday .. ", " .. date(withTime == false and "%d.%m." or "%d.%m. %H:%M", timestamp)
+end
+
+-- Status der Sitzung als farbiger Text: gesperrt / offen bis … / offen
+function UI.LockStateText(s)
+    if s.locked then
+        return "|cffff6060gesperrt|r"
+    elseif s.deadline and GetServerTime() >= s.deadline then
+        return "|cffff6060geschlossen (Anmeldeschluss)|r"
+    elseif s.deadline then
+        return "|cff60ff60offen bis " .. UI.FormatDate(s.deadline) .. "|r"
+    end
+    return "|cff60ff60offen|r"
+end
+
 -- Farbcodes entfernen (Chat erlaubt nur Links)
 function UI.StripColors(text)
     return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
