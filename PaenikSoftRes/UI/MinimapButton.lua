@@ -1,5 +1,5 @@
 -- Minimap-Button: Klick öffnet/schließt das Hauptfenster, Ziehen verschiebt ihn um die Minimap.
-local addonName, ns = ...
+local _, ns = ...
 
 local button = CreateFrame("Button", nil, Minimap)
 button:SetSize(31, 31)
@@ -57,7 +57,7 @@ end)
 
 button:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-    GameTooltip:SetText(addonName)
+    GameTooltip:SetText(ns.TITLE)
     GameTooltip:AddLine("Klick: Fenster öffnen/schließen", 1, 1, 1)
     GameTooltip:AddLine("Ziehen: Button verschieben", 1, 1, 1)
     GameTooltip:Show()

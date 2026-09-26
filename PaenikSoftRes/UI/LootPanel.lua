@@ -1,11 +1,12 @@
 -- Panel neben dem Lootfenster: Items der Leiche mit ihren Soft Reserves.
--- Der Raidlead kann die SRs pro Item oder für alle Items im Gruppenchat ansagen.
-local addonName, ns = ...
+-- Der Raidlead startet von hier die Würfelrunde (die Ansage im Chat macht der Start).
+-- Nach der Runde zeigt die Zeile den Gewinner (Zuordnung über lootKey = Leichen-GUID + ItemID).
+local _, ns = ...
 
 local UI = ns.UI
 
 local ROW_HEIGHT = 34
-local WIDTH = 330
+local WIDTH = 340
 local MIN_QUALITY = Enum.ItemQuality and Enum.ItemQuality.Uncommon or 2 -- graue/weiße Items ausblenden
 
 local panel = CreateFrame("Frame", nil, UIParent, "BasicFrameTemplateWithInset")
@@ -15,31 +16,21 @@ panel:SetClampedToScreen(true)
 panel.TitleText:SetText("Soft Reserves")
 panel:Hide()
 
+-- Verschiebbar (an der Titelleiste); eine eigene Position wird gespeichert und hat Vorrang
+-- vor dem Andocken ans Lootfenster.
+panel:EnableMouse(true)
+panel:SetMovable(true)
+panel:RegisterForDrag("LeftButton")
+panel:SetScript("OnDragStart", panel.StartMoving)
+panel:SetScript("OnDragStop", function(self)
+    self:StopMovingOrSizing()
+    local point, _, relativePoint, x, y = self:GetPoint(1)
+    ns.db.lootPanelPos = { point = point, relativePoint = relativePoint, x = x, y = y }
+    ns.Debug("Loot", "Loot-Panel verschoben", point, relativePoint, x, y)
+end)
+
 local rows = {}
 local lootItems = {} -- { { slot, itemID, link }, ... }
-
--- Ansage im Gruppenchat --------------------------------------------------------
-
-local function announce(item)
-    local channel = ns.GroupChannel()
-    local holders = UI.FormatHolders(item.itemID)
-    local text
-    if holders then
-        -- Farbcodes aus der Anzeige entfernen, Chat erlaubt nur Links
-        text = item.link .. " – SR: " .. holders:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
-    else
-        text = item.link .. " – kein SR"
-    end
-    if not channel then
-        ns.Print(text)
-        return
-    end
-    if C_ChatInfo.InChatMessagingLockdown and C_ChatInfo.InChatMessagingLockdown() then
-        ns.Print("Chat ist gerade gesperrt (Kampf in der Instanz). Bitte später ansagen.")
-        return
-    end
-    C_ChatInfo.SendChatMessage(text, channel)
-end
 
 -- Zeilen -------------------------------------------------------------------------
 
@@ -50,28 +41,31 @@ local function createRow(index)
     row:SetPoint("RIGHT", panel, "RIGHT", -10, 0)
     row:EnableMouse(true)
 
+    row.bg = row:CreateTexture(nil, "BACKGROUND")
+    row.bg:SetAllPoints()
+
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(ROW_HEIGHT - 6, ROW_HEIGHT - 6)
     row.icon:SetPoint("LEFT", row, "LEFT", 2, 0)
 
-    row.announce = UI.CreateButton(row, "Ansagen", 70, function(self)
+    row.roll = UI.CreateButton(row, "Würfeln", 70, function(self)
         local item = self:GetParent().item
         if item then
-            announce(item)
+            ns.Rolls:Start(item.itemID, item.link, nil, nil, nil, item.lootKey)
         end
     end)
-    row.announce:SetHeight(20)
-    row.announce:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+    row.roll:SetHeight(20)
+    row.roll:SetPoint("RIGHT", row, "RIGHT", 0, 0)
 
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     row.name:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 6, -1)
-    row.name:SetPoint("RIGHT", row.announce, "LEFT", -4, 0)
+    row.name:SetPoint("RIGHT", row.roll, "LEFT", -4, 0)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
 
     row.holders = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.holders:SetPoint("BOTTOMLEFT", row.icon, "BOTTOMRIGHT", 6, 1)
-    row.holders:SetPoint("RIGHT", row.announce, "LEFT", -4, 0)
+    row.holders:SetPoint("RIGHT", row.roll, "LEFT", -4, 0)
     row.holders:SetJustifyH("LEFT")
     row.holders:SetWordWrap(false)
 
@@ -88,18 +82,8 @@ local function createRow(index)
     return row
 end
 
-local announceAll = UI.CreateButton(panel, "Alle ansagen", 100, function()
-    for _, item in ipairs(lootItems) do
-        if UI.FormatHolders(item.itemID) then
-            announce(item)
-        end
-    end
-end)
-announceAll:SetHeight(20)
-
 local function refresh()
     local isLead = ns.Roles:IsLead()
-    local srCount = 0
     for index, item in ipairs(lootItems) do
         local row = rows[index] or createRow(index)
         rows[index] = row
@@ -107,25 +91,36 @@ local function refresh()
         local name, icon = UI.GetItemDisplay(item.itemID)
         row.icon:SetTexture(icon)
         row.name:SetText(name)
-        local holders, total = UI.FormatHolders(item.itemID)
-        if holders then
-            srCount = srCount + 1
-            row.holders:SetText(string.format("|cffffd100SR (%d):|r %s", total, holders))
+        -- Stand des Items: wird ausgewürfelt > vergeben (letztes Ergebnis) > SR-Inhaber
+        local awards = ns.Rolls:GetAwards(item.lootKey)
+        local award = awards[#awards]
+        if ns.Rolls:IsRolling(item.itemID, item.lootKey) then
+            row.holders:SetText("|cffffd100wird ausgewürfelt …|r")
+            row.bg:SetColorTexture(1, 0.82, 0, 0.12)
+            row.roll:SetText("Würfeln")
+        elseif award then
+            row.holders:SetText(string.format("|cff40ff40Gewonnen:|r %s (%s, %d)", UI.ShortName(award.winner or "?"),
+                ns.Rolls.LABEL[award.category] or award.category or "?", award.roll or 0))
+            row.bg:SetColorTexture(0.1, 0.6, 0.1, 0.2)
+            row.roll:SetText("Erneut")
         else
-            row.holders:SetText("|cff808080kein SR – freier Wurf|r")
+            local holders, total = UI.FormatHolders(item.itemID)
+            if holders then
+                row.holders:SetText(string.format("|cffffd100SR (%d):|r %s", total, holders))
+            else
+                row.holders:SetText("|cff808080kein SR – freier Wurf|r")
+            end
+            row.bg:SetColorTexture(0, 0, 0, 0)
+            row.roll:SetText("Würfeln")
         end
-        row.announce:SetShown(isLead)
+        row.roll:SetShown(isLead)
         row:Show()
     end
     for index = #lootItems + 1, #rows do
         rows[index]:Hide()
         rows[index].item = nil
     end
-    announceAll:ClearAllPoints()
-    announceAll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -10, 8)
-    announceAll:SetShown(isLead and srCount > 0)
-    local footer = (isLead and srCount > 0) and 30 or 10
-    panel:SetHeight(28 + #lootItems * ROW_HEIGHT + footer)
+    panel:SetHeight(28 + #lootItems * ROW_HEIGHT + 10)
 end
 
 -- Loot einlesen --------------------------------------------------------------------
@@ -138,7 +133,15 @@ local function readLoot()
             local _, _, _, _, quality = GetLootSlotInfo(slot)
             local itemID = C_Item.GetItemInfoInstant(link)
             if itemID and (quality == nil or quality >= MIN_QUALITY) then
-                table.insert(lootItems, { slot = slot, itemID = itemID, link = link })
+                -- Leiche + Item als Schlüssel, damit der Gewinner beim erneuten Öffnen wieder erscheint
+                local lootKey
+                if type(GetLootSourceInfo) == "function" then
+                    local guid = GetLootSourceInfo(slot)
+                    if guid and not (issecretvalue and issecretvalue(guid)) then
+                        lootKey = guid .. ":" .. itemID
+                    end
+                end
+                table.insert(lootItems, { slot = slot, itemID = itemID, link = link, lootKey = lootKey })
             end
         end
     end
@@ -146,7 +149,10 @@ end
 
 local function anchorPanel()
     panel:ClearAllPoints()
-    if LootFrame and LootFrame:IsShown() then
+    local pos = ns.db.lootPanelPos
+    if pos then
+        panel:SetPoint(pos.point, UIParent, pos.relativePoint, pos.x, pos.y)
+    elseif LootFrame and LootFrame:IsShown() then
         panel:SetPoint("TOPLEFT", LootFrame, "TOPRIGHT", 6, 0)
     else
         panel:SetPoint("LEFT", UIParent, "CENTER", 120, 0)
@@ -185,11 +191,13 @@ function ns:LOOT_CLOSED()
     panel:Hide()
 end
 
-ns:On("SESSION_CHANGED", function()
+local function refreshIfShown()
     if panel:IsShown() then
         refresh()
     end
-end)
+end
+ns:On("SESSION_CHANGED", refreshIfShown)
+ns:On("ROLL_CHANGED", refreshIfShown)
 
 ns:On("DB_READY", function()
     if ns.db.lootPanel == nil then
@@ -215,7 +223,11 @@ function ns.ShowLootTest()
             if not seen[entry.itemID] and #lootItems < 6 then
                 seen[entry.itemID] = true
                 local _, link = C_Item.GetItemInfo(entry.itemID)
-                table.insert(lootItems, { itemID = entry.itemID, link = link or ("item:" .. entry.itemID) })
+                table.insert(lootItems, {
+                    itemID = entry.itemID,
+                    link = link or ("item:" .. entry.itemID),
+                    lootKey = "test:" .. entry.itemID,
+                })
             end
         end
     end
@@ -226,5 +238,5 @@ function ns.ShowLootTest()
     refresh()
     anchorPanel()
     panel:Show()
-    ns.Print(addonName .. " Loot-Test: " .. #lootItems .. " Items")
+    ns.Print("Loot-Test: " .. #lootItems .. " Items")
 end

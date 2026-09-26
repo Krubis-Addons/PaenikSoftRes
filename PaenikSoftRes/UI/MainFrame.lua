@@ -1,6 +1,6 @@
 -- Hauptfenster mit den Tabs "Raider", "Raidlead" und "Übersicht".
 -- Inhalte: UI/RaiderPanel.lua, UI/LeadPanel.lua, UI/OverviewPanel.lua
-local addonName, ns = ...
+local _, ns = ...
 
 local UI = {}
 ns.UI = UI
@@ -23,7 +23,7 @@ mainFrame:RegisterForDrag("LeftButton")
 mainFrame:SetScript("OnDragStart", mainFrame.StartMoving)
 mainFrame:SetScript("OnDragStop", mainFrame.StopMovingOrSizing)
 mainFrame:SetClampedToScreen(true)
-mainFrame.TitleContainer.TitleText:SetText(addonName)
+mainFrame.TitleContainer.TitleText:SetText(ns.TITLE)
 mainFrame:SetPortraitToAsset(UI.ICON)
 mainFrame.CloseButton:SetScript("OnClick", function()
     mainFrame:Hide()
@@ -153,6 +153,11 @@ function UI.FormatHolders(itemID)
         parts[i] = entry.text
     end
     return table.concat(parts, ", "), total
+end
+
+-- Farbcodes entfernen (Chat erlaubt nur Links)
+function UI.StripColors(text)
+    return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
 end
 
 -- Tabs

@@ -72,9 +72,101 @@ function LootData:GetEncounters(fullKey)
     return provider:GetEncounters(key) or {}
 end
 
--- Anzahl der Bosse und der verschiedenen Items einer Instanz.
-function LootData:GetStats(fullKey)
+-- Auffüll-Items einer Instanz (optional, nur eigene Tabellen)
+function LootData:GetFiller(fullKey)
+    local providerID, key = splitKey(fullKey)
+    local provider = providerID and findProvider(providerID)
+    if provider and provider.GetFiller then
+        return provider:GetFiller(key) or {}
+    end
+    return {}
+end
+
+-- Verfügbarkeit von Items ----------------------------------------------------------
+-- Der Forever-Client kennt alle Classic-Items, der Server liefert aber nicht für alle Daten.
+-- ITEM_DATA_LOAD_RESULT(itemID, false) → Item wird in den Listen ausgeblendet.
+local MIN_ITEMS = 6 -- Bosse mit weniger verfügbaren Items werden aufgefüllt
+
+local failedItems = {}
+local requestedItems = {}
+local displayCache = {}
+
+function LootData:IsItemAvailable(itemID)
+    return not failedItems[itemID] and C_Item.DoesItemExistByID(itemID)
+end
+
+local function requestLoad(itemID)
+    if requestedItems[itemID] then return end
+    requestedItems[itemID] = true
+    if C_Item.DoesItemExistByID(itemID) and not C_Item.IsItemDataCachedByID(itemID) then
+        C_Item.RequestLoadItemDataByID(itemID)
+    end
+end
+
+local fireItemsChanged = function()
+    wipe(displayCache)
+    ns:Fire("LOOT_ITEMS_CHANGED")
+end
+local itemsChangedScheduled = false
+
+function ns:ITEM_DATA_LOAD_RESULT(itemID, success)
+    if success == false and requestedItems[itemID] and not failedItems[itemID] then
+        failedItems[itemID] = true
+        ns.Debug("LootData", "Item vom Server unbekannt:", itemID)
+        if not itemsChangedScheduled then
+            itemsChangedScheduled = true
+            C_Timer.After(0.5, function()
+                itemsChangedScheduled = false
+                fireItemsChanged()
+            end)
+        end
+    end
+end
+ns:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+
+-- Encounter für die Anzeige: nicht verfügbare Items entfernt, knappe Bosse aufgefüllt.
+-- Liefert dieselbe Struktur wie GetEncounters (plus filled = Anzahl Auffüll-Items).
+function LootData:GetDisplayEncounters(fullKey)
+    if displayCache[fullKey] then
+        return displayCache[fullKey]
+    end
     local encounters = self:GetEncounters(fullKey)
+    local filler = self:GetFiller(fullKey)
+
+    local used = {}
+    local result = {}
+    for index, encounter in ipairs(encounters) do
+        local items = {}
+        for _, itemID in ipairs(encounter.items) do
+            requestLoad(itemID)
+            if self:IsItemAvailable(itemID) then
+                table.insert(items, itemID)
+                used[itemID] = true
+            end
+        end
+        result[index] = { name = encounter.name, displayID = encounter.displayID, items = items, filled = 0 }
+    end
+
+    local nextFiller = 1
+    for _, encounter in ipairs(result) do
+        while #encounter.items < MIN_ITEMS and nextFiller <= #filler do
+            local itemID = filler[nextFiller]
+            nextFiller = nextFiller + 1
+            requestLoad(itemID)
+            if not used[itemID] and self:IsItemAvailable(itemID) then
+                table.insert(encounter.items, itemID)
+                encounter.filled = encounter.filled + 1
+                used[itemID] = true
+            end
+        end
+    end
+    displayCache[fullKey] = result
+    return result
+end
+
+-- Anzahl der Bosse und der verschiedenen (angezeigten) Items einer Instanz.
+function LootData:GetStats(fullKey)
+    local encounters = self:GetDisplayEncounters(fullKey)
     local seen, count = {}, 0
     for _, encounter in ipairs(encounters) do
         for _, itemID in ipairs(encounter.items) do
@@ -113,6 +205,14 @@ function StaticProvider:GetEncounters(key)
     for _, instance in ipairs(staticInstances) do
         if instance.key == key then
             return instance.encounters
+        end
+    end
+end
+
+function StaticProvider:GetFiller(key)
+    for _, instance in ipairs(staticInstances) do
+        if instance.key == key then
+            return instance.filler
         end
     end
 end

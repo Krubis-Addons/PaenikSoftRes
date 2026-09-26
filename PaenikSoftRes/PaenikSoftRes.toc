@@ -1,5 +1,5 @@
 ## Interface: 16001
-## Title: PaenikSoftRes
+## Title: PÄNIK SoftRes
 ## Notes: Soft-Reserve-Verwaltung für Raids: Regeln, Reserves, Loot-Anzeige und Roll-Runden.
 ## Author: Krubis Addons
 ## Version: @project-version@
@@ -14,11 +14,13 @@ Data\LootData.lua
 Data\EJProvider.lua
 Data\Instances\MoltenCore.lua
 Comm.lua
+Rolls.lua
 UI\MainFrame.lua
 UI\MinimapButton.lua
 UI\RaiderPanel.lua
 UI\LeadPanel.lua
 UI\OverviewPanel.lua
 UI\LootPanel.lua
+UI\RollFrames.lua
 UI\Tooltip.lua
 Probe.lua

@@ -10,7 +10,7 @@
 --   1^Q                                               Raider → Gruppe: Stand anfordern
 --   1^S^sid^id,id                                     Raider → Lead (Whisper): eigene Reserves
 --   1^X^sid^Text                                      Lead → Raider (Whisper): abgelehnt
-local addonName, ns = ...
+local _, ns = ...
 
 local Comm = {}
 ns.Comm = Comm
@@ -250,7 +250,7 @@ function Comm:SubmitOwnReserves(itemIDs)
         requestTimer = C_Timer.NewTimer(REQUEST_TIMEOUT, function()
             requestTimer = nil
             pendingOwn = nil
-            ns.Print("Keine Antwort vom Raidlead (" .. s.leader .. "). Ist " .. addonName .. " bei ihm aktiv?")
+            ns.Print("Keine Antwort vom Raidlead (" .. s.leader .. "). Ist " .. ns.TITLE .. " bei ihm aktiv?")
             ns:Fire("SESSION_CHANGED")
         end)
     end, "S", s.id, table.concat(itemIDs, ","))
@@ -429,6 +429,31 @@ end
 
 ns:On("LOGIN", requestStateSoon)
 ns:On("ROLE_CHANGED", requestStateSoon)
+
+-- Schnittstelle für weitere Module (z. B. Rolls.lua) -----------------------------
+
+-- Nachricht an die Gruppe (nichts, wenn nicht in einer Gruppe)
+function Comm:SendGroup(...)
+    send(groupChannel(), nil, ...)
+end
+
+function Comm:SendWhisper(target, ...)
+    send("WHISPER", target, ...)
+end
+
+-- Wie SendWhisper, ruft onSent auf, sobald die Nachricht tatsächlich gesendet wurde
+function Comm:SendWhisperThen(target, onSent, ...)
+    queueMessage("WHISPER", target, onSent, ...)
+end
+
+-- handler(sender, fields); fields[1] = Version, fields[2] = Typ, ab fields[3] die Daten
+function Comm:RegisterHandler(msgType, handler)
+    assert(not handlers[msgType], "Nachrichtentyp bereits vergeben: " .. msgType)
+    handlers[msgType] = handler
+end
+
+Comm.IsGroupLeader = isGroupLeader
+Comm.Sanitize = sanitize
 
 C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
 ns:RegisterEvent("CHAT_MSG_ADDON")

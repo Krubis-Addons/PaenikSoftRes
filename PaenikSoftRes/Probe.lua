@@ -1,6 +1,6 @@
 -- Prüft ingame, welche (nicht dokumentierten) APIs in WoW: Forever vorhanden sind.
 -- Ergebnis landet im Debug-Log (Kategorie "Probe").
-local addonName, ns = ...
+local _, ns = ...
 
 local GLOBALS = {
     "EJ_GetNumTiers",
@@ -14,6 +14,7 @@ local GLOBALS = {
     "GetNumLootItems",
     "GetLootSlotLink",
     "GetLootSlotInfo",
+    "GetLootSourceInfo",
     "RandomRoll",
     "GetRaidRosterInfo",
     "IsInGroup",
@@ -52,7 +53,7 @@ local function probeItems()
         end
         ns.Debug("Probe", "Items", instance.fullKey, instance.name, "gesamt", total, "unbekannt", #unknown,
             table.concat(unknown, ","))
-        print(string.format("%s: %s – %d Items, %d unbekannt", addonName, instance.name, total, #unknown))
+        ns.Print(string.format("%s – %d Items, %d unbekannt", instance.name, total, #unknown))
     end
 end
 
@@ -94,32 +95,32 @@ function ns.RunProbe()
     ns.Debug("Probe", "Instanzen aus dem EJ-Provider:", ejCount)
     probeItems()
     if #missing == 0 then
-        print(addonName .. ": Probe OK, alle APIs vorhanden.")
+        ns.Print("Probe OK, alle APIs vorhanden.")
     else
-        print(addonName .. ": Probe – fehlend: " .. table.concat(missing, ", "))
+        ns.Print("Probe – fehlend: " .. table.concat(missing, ", "))
     end
-    print(addonName .. ": Details im Debug-Log (nach /reload lesbar).")
+    ns.Print("Details im Debug-Log (nach /reload lesbar).")
 end
 
 -- Test-Reserves erfundener Spieler (nur zum Testen der Anzeigen ohne Gruppe).
 function ns.AddFakeReserves()
     local s = ns.Session:Get()
     if IsInGroup and IsInGroup() then
-        print(addonName .. ": Testspieler nur ohne Gruppe.")
+        ns.Print("Testspieler nur ohne Gruppe.")
         return
     end
     if not s or not s.instanceKey or not ns.Session:IsOwner() then
-        print(addonName .. ": Erst eine eigene Sitzung mit Instanz anlegen.")
+        ns.Print("Erst eine eigene Sitzung mit Instanz anlegen.")
         return
     end
     local items = {}
-    for _, encounter in ipairs(ns.LootData:GetEncounters(s.instanceKey)) do
+    for _, encounter in ipairs(ns.LootData:GetDisplayEncounters(s.instanceKey)) do
         for _, itemID in ipairs(encounter.items) do
             table.insert(items, itemID)
         end
     end
     if #items == 0 then
-        print(addonName .. ": Die Instanz hat keine Loot-Daten.")
+        ns.Print("Die Instanz hat keine Loot-Daten.")
         return
     end
     local realm = GetNormalizedRealmName() or "Test"
@@ -131,5 +132,5 @@ function ns.AddFakeReserves()
         -- source "fake": wird nie an die Gruppe gesendet
         ns.Session:ApplyRemoteReserves("Testspieler" .. i .. "-" .. realm, picks, "fake")
     end
-    print(addonName .. ": 5 Testspieler mit Reserves eingetragen.")
+    ns.Print("5 Testspieler mit Reserves eingetragen.")
 end

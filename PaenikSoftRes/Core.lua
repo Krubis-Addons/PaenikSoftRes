@@ -1,5 +1,8 @@
 local addonName, ns = ...
 
+-- Anzeigename im Spiel (Ordner und SavedVariables heißen weiter PaenikSoftRes)
+ns.TITLE = "PÄNIK SoftRes"
+
 local DB_VERSION = 1
 
 local defaults = {
@@ -44,7 +47,7 @@ function ns:Fire(name, ...)
 end
 
 function ns.Print(msg)
-    print("|cff33ff99" .. addonName .. "|r: " .. tostring(msg))
+    print("|cff33ff99" .. ns.TITLE .. "|r: " .. tostring(msg))
 end
 
 -- Spielerschlüssel "Vorname[ Nachname]-Realm", im selben Format wie der Absender von CHAT_MSG_ADDON
@@ -125,6 +128,21 @@ function ns.GroupChannel()
     end
 end
 
+-- Nachricht in den Gruppenchat; ohne Gruppe nur lokal. Beachtet die Chat-Sperre (Midnight).
+function ns.SendGroupChat(text)
+    local channel = ns.GroupChannel()
+    if not channel then
+        ns.Print(text)
+        return true
+    end
+    if C_ChatInfo.InChatMessagingLockdown and C_ChatInfo.InChatMessagingLockdown() then
+        ns.Print("Chat ist gerade gesperrt (Kampf in der Instanz): " .. text)
+        return false
+    end
+    C_ChatInfo.SendChatMessage(text, channel)
+    return true
+end
+
 -- Migration: Schlüssel aus der Zeit mit UnitFullName ("Krubi-Bambubi") auf das neue Format umstellen.
 local function migratePlayerKeys()
     local s = ns.db.session
@@ -160,12 +178,14 @@ local function setForceRole(role)
     ns.db.forceRole = role
     ns.Debug("Core", "forceRole gesetzt:", role)
     ns:Fire("ROLE_CHANGED")
-    print(addonName .. ": Rolle " .. (role or "automatisch"))
+    ns.Print("Rolle " .. (role or "automatisch"))
 end
 
 SLASH_PAENIKSOFTRES1 = "/paeniksoftres"
 SlashCmdList.PAENIKSOFTRES = function(msg)
-    msg = strtrim(msg or ""):lower()
+    local raw = strtrim(msg or "")
+    local cmd, rest = raw:match("^(%S*)%s*(.*)$")
+    msg = (cmd or ""):lower()
     local frame = ns.mainFrame
     if msg == "show" then
         frame:Show()
@@ -174,26 +194,31 @@ SlashCmdList.PAENIKSOFTRES = function(msg)
     elseif msg == "minimap" then
         local hidden = ns.db.minimap.hide
         ns.SetMinimapButtonShown(hidden)
-        print(addonName .. ": Minimap-Button " .. (hidden and "an" or "aus"))
+        ns.Print("Minimap-Button " .. (hidden and "an" or "aus"))
     elseif msg == "" or msg == "toggle" then
         frame:SetShown(not frame:IsShown())
     elseif msg == "debug" then
         ns.debugEnabled = not ns.debugEnabled
-        print(addonName .. ": Debug " .. (ns.debugEnabled and "an" or "aus"))
+        ns.Print("Debug " .. (ns.debugEnabled and "an" or "aus"))
     elseif msg == "lead" or msg == "raider" then
         setForceRole(msg)
     elseif msg == "auto" then
         setForceRole(nil)
+    elseif msg == "roll" then
+        ns.StartRollFromSlash(rest)
     elseif msg == "loottest" then
         ns.ShowLootTest()
+    elseif msg == "lootpanel" and rest:lower() == "reset" then
+        ns.db.lootPanelPos = nil
+        ns.Print("Loot-Panel dockt wieder am Lootfenster an.")
     elseif msg == "lootpanel" then
         ns.db.lootPanel = not ns.db.lootPanel
-        print(addonName .. ": Loot-Panel " .. (ns.db.lootPanel and "an" or "aus"))
+        ns.Print("Loot-Panel " .. (ns.db.lootPanel and "an" or "aus"))
     elseif msg == "fake" then
         ns.AddFakeReserves()
     elseif msg == "probe" then
         ns.RunProbe()
     else
-        print(addonName .. ": Befehle: show, hide, toggle, minimap, lootpanel, loottest, lead, raider, auto, probe, fake, debug")
+        ns.Print("Befehle: show, hide, toggle, minimap, roll <Item>, lootpanel [reset], loottest, lead, raider, auto, probe, fake, debug")
     end
 end

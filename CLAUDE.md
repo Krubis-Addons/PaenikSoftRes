@@ -1,6 +1,6 @@
 @~/.claude/wow-rules.md
 
-# Addon: PaenikSoftRes
+# Addon: PaenikSoftRes (Anzeigename „PÄNIK SoftRes“, `ns.TITLE`)
 
 ## Worum geht es
 Das Addon ist ein Soft Reserve Addon zum Management der Soft Reserves eines Raids. Es gibt verschiedene Rollen mit unterschiedlichen Funktionen. Ziel des Addons ist es ein Tool zu schaffen um das vergeben von Loot zu erleichtern und eine Ingame Oberfläche zu schaffen für Raider und Raidlead ohne auf externe Quellen angewiesen zu sein.
@@ -30,9 +30,11 @@ Es gibt ein Oberfläche beim Looten mit den Soft Reserve Informationen pro Item.
 - Datenmodell: `ns.db.session` (siehe Kopfkommentar in `Session.lua`). Spielerschlüssel immer `Name-Realm` über `ns.FullName(unit)`.
 - Interne Ereignisse über `ns:On(name, fn)` / `ns:Fire(name, ...)`: `DB_READY`, `LOGIN`, `SESSION_CHANGED`, `ROLE_CHANGED`.
 - Rolle (`ns.Roles:IsLead()`): `db.forceRole` (Slash `lead|raider|auto`) > solo = Raidlead > in der Gruppe nur der Gruppenleiter. Maßgebliche Master-Liste nur bei `Session:IsMaster()` (Besitzer + Raidlead); ein neuer Gruppenleiter kann eine fremde Sitzung übernehmen (`Session:TakeOver`).
+- Verfügbarkeit: Der Forever-Server kennt nicht alle Classic-Items. `LootData:GetDisplayEncounters` blendet Items mit `ITEM_DATA_LOAD_RESULT` = false aus und füllt Bosse unter 6 Items aus `filler` der Instanz auf. UI immer über GetDisplayEncounters, Validierung (Session) über alle Items + filler.
 - Loot-Daten über Provider (`Data/LootData.lua`): EJ-Provider (in der Beta per `EncounterJournalDisabled=1` leer) + eigene Tabellen in `Data/Instances/` (ItemIDs aus AtlasLootClassic). Instanzen heißen `providerID:key` (z. B. `static:mc`). Sync über Addon-Messages, Präfix `PSR`, Protokoll im Kopf von `Comm.lua`. Regeln (`R`) nur vom Gruppenleiter annehmen; voller Stand = `R` + `F` + `P`-Chunks.
 - Spielernamen: Forever hat Nachnamen. `UnitName`/`UnitFullName` liefern dann (Vorname, Nachname) statt (Name, Realm). `ns.FullName` baut „Vorname Nachname-Realm“ (Realm über `GetPlayerInfoByGUID`, sonst `GetNormalizedRealmName`), passend zum Absender von CHAT_MSG_ADDON (z. B. „Krubi Shooty-ClassicBetaPvE2“). Alte Schlüssel („Krubi-Shooty“) migriert `migratePlayerKeys` in Core.lua.
 - Nicht dokumentierte Globals (z. B. `EJ_*`, `GetLootSlotLink`, `IsInGroup`) vor der Nutzung mit `/paeniksoftres probe` ingame prüfen.
 - SavedVariables: laut forever-addon-kit wurden sie in der Beta nie geladen. Am 2026-09-26 war die Sitzung nach dem Neustart aber vorhanden (Log: „Sitzung vorhanden: true“), das Laden funktioniert also inzwischen. Kein Workaround nötig.
 - Minimap-Button ohne Bibliothek (`UI/MinimapButton.lua`), Position in `db.minimap.angle`; Icon `ns.UI.ICON` (Kleiner brauner Beutel, ItemID 4496) auch als Fensterporträt.
+- Würfelrunden: Protokoll im Kopf von `Rolls.lua` (RS/RD/RE/RC über `Comm:RegisterHandler`). Kategorie ergibt sich aus dem Würfelbereich (SR/MS /roll, OS /roll 50, Transmog /roll 25) – funktioniert auch ohne Addon; RD meldet nur „Passen“.
 - Testhilfen: `/paeniksoftres fake` trägt 5 Testspieler ein (nur ohne Gruppe, `source = "fake"`, wird nie gesendet); `/paeniksoftres loottest` zeigt das Loot-Panel mit vorhandenen Reserves ohne Leiche.

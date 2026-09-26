@@ -116,6 +116,34 @@ local lockButton = UI.CreateButton(rules, "Sperren", 140, function()
 end)
 lockButton:SetPoint("TOPLEFT", lockText, "BOTTOMLEFT", 0, -8)
 
+-- Würfelzeit: Zeitfenster für Würfelrunden (persönliche Einstellung des Raidleads)
+local ROLL_DURATIONS = { 0, 15, 20, 30, 45, 60, 90, 120 }
+
+local durationLabel = createLabel("Würfelzeit:", lockButton, -18)
+
+local durationDropdown = CreateFrame("DropdownButton", nil, rules, "WowStyle1DropdownTemplate")
+durationDropdown:SetWidth(160)
+durationDropdown:SetPoint("LEFT", durationLabel, "RIGHT", 0, 0)
+
+local function durationText(seconds)
+    return seconds == 0 and "Manuell (Raidlead beendet)" or (seconds .. " Sekunden")
+end
+
+durationDropdown:SetupMenu(function(_, root)
+    for _, seconds in ipairs(ROLL_DURATIONS) do
+        root:CreateRadio(durationText(seconds),
+            function(value) return ((ns.db and ns.db.rollDuration) or 0) == value end,
+            function(value)
+                ns.db.rollDuration = value
+                ns.Debug("LeadPanel", "Würfelzeit", value)
+            end,
+            seconds)
+    end
+end)
+
+local durationHint = UI.CreateText(rules, durationLabel, -10, "GameFontHighlightSmall")
+durationHint:SetText("Mit Zeitfenster endet die Runde automatisch; vorzeitiges Beenden bleibt möglich.")
+
 -- Unten: Sitzung neu starten / verwerfen
 local restartButton = UI.CreateButton(rules, "Neu starten", 140, function()
     ns.Session:New(ns.FullName("player"))
@@ -165,6 +193,7 @@ local function refresh()
     -- Auswahltext neu auswerten; kein GenerateMenu, da refresh auch aus einer Menü-Antwort kommt
     instanceDropdown:SignalUpdate()
     maxDropdown:SignalUpdate()
+    durationDropdown:SignalUpdate()
 
     if s.locked then
         lockText:SetText("Status: |cffff6060gesperrt|r – keine Änderungen an Regeln und Reserves")
@@ -177,4 +206,5 @@ end
 
 panel:HookScript("OnShow", refresh)
 ns:On("SESSION_CHANGED", refresh)
+ns:On("LOOT_ITEMS_CHANGED", refresh)
 ns:On("DB_READY", refresh)

@@ -65,6 +65,7 @@ function Session:TakeOver(leader)
         allowDuplicates = old.allowDuplicates,
         locked = old.locked,
         reserves = reserves,
+        history = old.history and CopyTable(old.history) or nil,
     }
     changed("Sitzung übernommen von", old.leader)
     ns:Fire("SESSION_FULL_SYNC")
@@ -167,6 +168,10 @@ function Session:GetInstanceItemSet()
             for _, itemID in ipairs(encounter.items) do
                 set[itemID] = true
             end
+        end
+        -- Auffüll-Items sind ebenfalls wählbar (Obermenge, unabhängig vom Ladestand)
+        for _, itemID in ipairs(ns.LootData:GetFiller(s.instanceKey)) do
+            set[itemID] = true
         end
         -- Nur statische Daten cachen; EJ-Loot kann noch nachgeladen werden.
         if next(set) and s.instanceKey:find("^static:") then

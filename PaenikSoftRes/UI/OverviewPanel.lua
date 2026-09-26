@@ -9,7 +9,7 @@ local ROW_HEIGHT = 36
 local refreshList -- forward
 
 local header = UI.CreateText(panel, nil, nil, "GameFontNormal")
-header:SetWidth(500)
+header:SetWidth(560)
 
 local emptyText = panel:CreateFontString(nil, "OVERLAY", "GameFontDisable")
 emptyText:SetPoint("CENTER", panel, "CENTER", 0, -20)
@@ -53,7 +53,7 @@ local function initRow(row, data)
     local name, icon = UI.GetItemDisplay(data.itemID, onItemLoaded)
     row.icon:SetTexture(icon)
     row.name:SetText(name)
-    row.count:SetText(data.total .. " SR")
+    row.count:SetText(data.countText or (data.total .. " SR"))
     row.players:SetText(data.players)
 end
 
@@ -65,7 +65,7 @@ scrollBox:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -20, 0)
 local function itemOrder(s)
     local order, n = {}, 0
     if s.instanceKey then
-        for _, encounter in ipairs(ns.LootData:GetEncounters(s.instanceKey)) do
+        for _, encounter in ipairs(ns.LootData:GetDisplayEncounters(s.instanceKey)) do
             for _, itemID in ipairs(encounter.items) do
                 if not order[itemID] then
                     n = n + 1
@@ -114,6 +114,31 @@ local function buildElements(s)
     return elements, playerCount, reserveCount
 end
 
+-- Verlauf: vergebene Items, neueste zuerst
+local showHistory = false
+
+local function buildHistoryElements(s)
+    local elements = {}
+    for i = #(s.history or {}), 1, -1 do
+        local entry = s.history[i]
+        table.insert(elements, {
+            itemID = entry.itemID,
+            total = 0,
+            countText = date("%H:%M", entry.time),
+            players = string.format("|cffffd100%s|r – %s, %d", UI.ShortName(entry.winner or "?"),
+                ns.Rolls.LABEL[entry.category] or entry.category or "?", entry.roll or 0),
+        })
+    end
+    return elements
+end
+
+local modeButton = UI.CreateButton(panel, "Verlauf", 110, function(self)
+    showHistory = not showHistory
+    self:SetText(showHistory and "Reserves" or "Verlauf")
+    refreshList()
+end)
+modeButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, 4)
+
 function refreshList()
     local s = ns.Session:Get()
     if not s then
@@ -121,6 +146,15 @@ function refreshList()
         scrollBox:Hide()
         emptyText:SetText("Noch keine Soft-Reserve-Sitzung.")
         emptyText:Show()
+        return
+    end
+    if showHistory then
+        local elements = buildHistoryElements(s)
+        header:SetText(string.format("%s – Verlauf, %d Items vergeben", s.instanceName or "keine Instanz", #elements))
+        scrollBox:SetShown(#elements > 0)
+        emptyText:SetShown(#elements == 0)
+        emptyText:SetText("Noch keine Items vergeben.")
+        scrollBox:SetDataProvider(CreateDataProvider(elements), ScrollBoxConstants.RetainScrollPosition)
         return
     end
     local elements, playerCount, reserveCount = buildElements(s)
@@ -131,10 +165,11 @@ function refreshList()
     emptyText:SetText("Noch keine Reserves.")
     scrollBox:SetDataProvider(CreateDataProvider(elements), ScrollBoxConstants.RetainScrollPosition)
 end
-
 panel:HookScript("OnShow", refreshList)
-ns:On("SESSION_CHANGED", UI.Debounce(function()
+local refreshIfShown = UI.Debounce(function()
     if panel:IsVisible() then
         refreshList()
     end
-end))
+end)
+ns:On("SESSION_CHANGED", refreshIfShown)
+ns:On("LOOT_ITEMS_CHANGED", refreshIfShown)

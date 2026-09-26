@@ -8,6 +8,7 @@
     "PanelTemplates_SetTab",
     "PanelTemplates_SetTabEnabled",
     "SOUNDKIT",
+    "RANDOM_ROLL_RESULT",
     "LootFrame",
     "TooltipDataProcessor",
     "ScrollUtil",

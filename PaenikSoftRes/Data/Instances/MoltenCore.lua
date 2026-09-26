@@ -1,4 +1,6 @@
--- Molten Core (Classic). ItemIDs, npcIDs und DisplayIDs aus AtlasLootClassic (data.lua), per Skript übernommen.
+-- Molten Core (Classic). ItemIDs, npcIDs und DisplayIDs aus AtlasLootClassic (data.lua, Quelle: Wowhead Classic),
+-- per Skript übernommen. Items, die der Forever-Server nicht kennt, blendet LootData zur Laufzeit aus;
+-- Bosse mit zu wenig Items werden dann aus "filler" aufgefüllt (nur zum Testen).
 local _, ns = ...
 
 ns.LootData:RegisterStaticInstance({
@@ -270,5 +272,61 @@ ns.LootData:RegisterStaticInstance({
                 17076, -- Bonereaver's Edge
             },
         },
+        {
+            name = "Zufallsdrops (alle Bosse)",
+            items = {
+                18264, -- Plans: Elemental Sharpening Stone
+                18292, -- Schematic: Core Marksman Rifle
+                18291, -- Schematic: Force Reactive Disk
+                18290, -- Schematic: Biznicks 247x128 Accurascope
+                18259, -- Formula: Enchant Weapon - Spell Power
+                18260, -- Formula: Enchant Weapon - Healing Power
+                18252, -- Pattern: Core Armor Kit
+                18265, -- Pattern: Flarecore Wraps
+                21371, -- Pattern: Core Felcloth Bag
+                18257, -- Recipe: Major Rejuvenation Potion
+            },
+        },
+        {
+            name = "Trash",
+            items = {
+                16817, -- Girdle of Prophecy
+                16802, -- Arcanist Belt
+                16806, -- Felheart Belt
+                16827, -- Nightslayer Belt
+                16828, -- Cenarion Belt
+                16851, -- Giantstalker's Belt
+                16838, -- Earthfury Belt
+                16858, -- Lawbringer Belt
+                16864, -- Belt of Might
+                17011, -- Lava Core
+                17010, -- Fiery Core
+                11382, -- Blood of the Mountain
+                17012, -- Core Leather
+                16819, -- Vambraces of Prophecy
+                16799, -- Arcanist Bindings
+                16804, -- Felheart Bracers
+                16825, -- Nightslayer Bracelets
+                16830, -- Cenarion Bracers
+                16850, -- Giantstalker's Bracers
+                16840, -- Earthfury Bracers
+                16857, -- Lawbringer Bracers
+                16861, -- Bracers of Might
+            },
+        },
+    },
+    -- Auffüll-Pool: Dungeon-Loot (Ragefire bis Verlies), ebenfalls aus AtlasLootClassic
+    filler = {
+        14149, 14148, 14145, 14150, 14147, 14151, 6460, 10410, 6465, 10412,
+        5404, 6446, 13245, 6447, 6472, 6473, 6449, 6448, 6469, 5970,
+        10411, 6459, 6630, 6631, 6629, 6461, 6627, 6463, 10441, 5243,
+        6632, 10413, 872, 5187, 5443, 5444, 5194, 5195, 1937, 2169,
+        1156, 5199, 7230, 5192, 5196, 5201, 10403, 5200, 5193, 5202,
+        10399, 5191, 2874, 5198, 5197, 8490, 5397, 8492, 5254, 3864,
+        6341, 932, 1292, 6226, 6633, 6321, 6323, 6320, 3191, 6318,
+        6319, 6642, 6641, 5943, 6340, 3230, 3748, 6314, 6324, 6392,
+        6220, 2292, 1489, 1974, 2807, 1482, 1935, 1483, 1318, 3194,
+        2205, 1484, 23173, 23171, 6895, 6283, 6907, 6908, 888, 3078,
+        11121, 6906, 6905, 1470, 16782, 1155, 6903, 6901, 6904,
     },
 })

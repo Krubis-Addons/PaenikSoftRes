@@ -86,7 +86,7 @@ end
 
 -- Boss zu einem Item (für die Anzeige in „Meine Reserves“)
 local function bossNameForItem(s, itemID)
-    for _, encounter in ipairs(ns.LootData:GetEncounters(s.instanceKey)) do
+    for _, encounter in ipairs(ns.LootData:GetDisplayEncounters(s.instanceKey)) do
         for _, id in ipairs(encounter.items) do
             if id == itemID then
                 return encounter.name
@@ -335,7 +335,7 @@ local function buildBossElements(s, mineCount)
         total = total + count
     end
     local elements = { { index = ALL_BOSSES, name = "Alle Bosse", mine = total } }
-    for index, encounter in ipairs(ns.LootData:GetEncounters(s.instanceKey)) do
+    for index, encounter in ipairs(ns.LootData:GetDisplayEncounters(s.instanceKey)) do
         local mine = 0
         local counted = {}
         for _, itemID in ipairs(encounter.items) do
@@ -366,7 +366,7 @@ local function buildItemElements(s, mineCount)
     end
 
     local elements, index = {}, {}
-    for bossIndex, encounter in ipairs(ns.LootData:GetEncounters(s.instanceKey)) do
+    for bossIndex, encounter in ipairs(ns.LootData:GetDisplayEncounters(s.instanceKey)) do
         if selectedBoss == ALL_BOSSES or selectedBoss == bossIndex then
             for _, itemID in ipairs(encounter.items) do
                 local existing = index[itemID]
@@ -415,7 +415,7 @@ function refreshList()
         lastInstanceKey = s.instanceKey
         selectedBoss = ALL_BOSSES
     end
-    local encounters = ns.LootData:GetEncounters(s.instanceKey)
+    local encounters = ns.LootData:GetDisplayEncounters(s.instanceKey)
     if selectedBoss > #encounters then
         selectedBoss = ALL_BOSSES
     end
@@ -451,4 +451,5 @@ local refreshIfShown = UI.Debounce(function()
     end
 end)
 ns:On("SESSION_CHANGED", refreshIfShown)
+ns:On("LOOT_ITEMS_CHANGED", refreshIfShown)
 ns:On("ROLE_CHANGED", refreshIfShown)
