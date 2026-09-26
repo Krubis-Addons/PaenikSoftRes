@@ -21,18 +21,21 @@ local help = dialog:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 help:SetPoint("TOPLEFT", dialog, "TOPLEFT", 14, -32)
 help:SetPoint("RIGHT", dialog, "RIGHT", -14, 0)
 help:SetJustifyH("LEFT")
-help:SetText("Auf softres.it den Raid öffnen, „CSV“ exportieren, den Text kopieren und hier mit Strg+V einfügen.")
+help:SetText("Auf softres.it den Raid öffnen, „Gargul Export“ oder „CSV“ wählen, den Text kopieren und hier "
+    .. "mit Strg+V einfügen. Das Format wird automatisch erkannt.")
 
 -- Mehrzeiliges Eingabefeld (Blizzard-Template mit Rahmen und Scrollbalken)
 local input = CreateFrame("ScrollFrame", nil, dialog, "InputScrollFrameTemplate")
 input:SetPoint("TOPLEFT", help, "BOTTOMLEFT", 6, -12)
 input:SetPoint("RIGHT", dialog, "RIGHT", -22, 0)
 input:SetHeight(210)
--- OnLoad des Templates lief mit Breite 0: Breiten nachziehen
-input.EditBox:SetWidth(470)
-input.EditBox.Instructions:SetWidth(470)
+-- OnLoad des Templates lief mit Breite 0: Breiten an die echte Größe anpassen (Platz für die Scrollleiste)
+input:HookScript("OnSizeChanged", function(self, width)
+    self.EditBox:SetWidth(width - 18)
+    self.EditBox.Instructions:SetWidth(width - 18)
+end)
 input.EditBox:SetFontObject("GameFontHighlightSmall")
-input.EditBox.Instructions:SetText("ItemId,Name,Class,Note,Plus …")
+input.EditBox.Instructions:SetText("Gargul-Export (eine lange Zeile) oder CSV (ItemId,Name,Class,Note,Plus …)")
 input.CharCount:Hide()
 
 local preview = dialog:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -42,14 +45,11 @@ preview:SetJustifyH("LEFT")
 preview:SetJustifyV("TOP")
 preview:SetHeight(70)
 
-local parsed -- Ergebnis der letzten Vorschau
-
 local replaceButton, mergeButton
 
 local function updatePreview()
     local text = input.EditBox:GetText()
-    local result, err = ns.Import.ParseSoftresCSV(text)
-    parsed = result
+    local result, err = ns.Import.ParseSoftres(text)
     replaceButton:SetEnabled(result ~= nil)
     mergeButton:SetEnabled(result ~= nil)
     if not result then
@@ -57,15 +57,18 @@ local function updatePreview()
         return
     end
     local lines = {
-        string.format("|cff60ff60%d Spieler, %d Reserves erkannt.|r", result.players, result.count),
+        string.format("|cff60ff60%s: %d Spieler, %d Reserves erkannt.|r", result.format, result.players, result.count),
     }
+    if result.hardReserves and result.hardReserves > 0 then
+        table.insert(lines, string.format("|cff999999%d Hard Reserves werden nicht übernommen.|r", result.hardReserves))
+    end
     if #result.notInGroup > 0 then
         local names = {}
         for i = 1, math.min(#result.notInGroup, 6) do
             names[i] = UI.ShortName(result.notInGroup[i])
         end
         local more = #result.notInGroup > 6 and (" … (+" .. (#result.notInGroup - 6) .. ")") or ""
-        table.insert(lines, string.format("|cffffd100Nicht in der Gruppe (%d):|r %s%s",
+        table.insert(lines, string.format("|cffffd100Noch nicht in der Gruppe (%d, wird beim Beitritt zugeordnet):|r %s%s",
             #result.notInGroup, table.concat(names, ", "), more))
     end
     if result.notInInstance > 0 then
@@ -73,7 +76,7 @@ local function updatePreview()
             result.notInInstance))
     end
     if result.skipped > 0 then
-        table.insert(lines, string.format("|cff999999%d Zeilen übersprungen (ohne ItemId oder Name).|r", result.skipped))
+        table.insert(lines, string.format("|cff999999%d Einträge übersprungen (ohne ItemId, ohne Name oder mit ungültigem Namen).|r", result.skipped))
     end
     preview:SetText(table.concat(lines, "\n"))
 end
@@ -85,8 +88,15 @@ input.EditBox:HookScript("OnTextChanged", function()
 end)
 
 local function apply(replaceAll)
-    if not parsed then return end
-    local ok, err = ns.Import.Apply(parsed, replaceAll)
+    -- Dialog inzwischen geschlossen (z. B. während der Rückfrage): nichts übernehmen
+    if not dialog:IsShown() then return end
+    -- Aktuellen Text neu lesen: die entprellte Vorschau kann noch den alten Stand zeigen
+    local result, parseErr = ns.Import.ParseSoftres(input.EditBox:GetText())
+    if not result then
+        preview:SetText("|cffff6060" .. tostring(parseErr) .. "|r")
+        return
+    end
+    local ok, err = ns.Import.Apply(result, replaceAll)
     if not ok then
         preview:SetText("|cffff6060" .. tostring(err) .. "|r")
         return
@@ -94,7 +104,11 @@ local function apply(replaceAll)
     dialog:Hide()
 end
 
-replaceButton = UI.CreateButton(dialog, "Ersetzen", 140, function() apply(true) end)
+replaceButton = UI.CreateButton(dialog, "Ersetzen", 140, function()
+    local s = ns.Session:Get()
+    UI.Confirm("Alle bisherigen Reserves durch den Import ersetzen?", function() apply(true) end,
+        s ~= nil and next(s.reserves) ~= nil)
+end)
 replaceButton:SetPoint("BOTTOMLEFT", dialog, "BOTTOMLEFT", 14, 12)
 mergeButton = UI.CreateButton(dialog, "Zusammenführen", 140, function() apply(false) end)
 mergeButton:SetPoint("LEFT", replaceButton, "RIGHT", 8, 0)
@@ -119,7 +133,6 @@ function ns.ShowImportDialog()
         return
     end
     input.EditBox:SetText("")
-    parsed = nil
     replaceButton:Disable()
     mergeButton:Disable()
     preview:SetText("")

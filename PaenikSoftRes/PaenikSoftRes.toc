@@ -6,6 +6,9 @@
 ## IconTexture: Interface\Icons\INV_Misc_Bag_08
 ## SavedVariables: PaenikSoftResDB, PaenikSoftResDebugLog
 
+Libs\LibStub\LibStub.lua
+Libs\LibDeflate\LibDeflate.lua
+
 Debug.lua
 Core.lua
 Session.lua
@@ -13,6 +16,7 @@ Roles.lua
 Data\LootData.lua
 Data\EJProvider.lua
 Data\Instances\MoltenCore.lua
+Data\Instances\ForeverDungeons.lua
 Comm.lua
 Rolls.lua
 Import.lua
@@ -24,5 +28,6 @@ UI\OverviewPanel.lua
 UI\LootPanel.lua
 UI\RollFrames.lua
 UI\ImportDialog.lua
+UI\Options.lua
 UI\Tooltip.lua
 Probe.lua

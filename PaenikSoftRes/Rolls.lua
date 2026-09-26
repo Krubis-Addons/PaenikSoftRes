@@ -27,6 +27,13 @@ local RANGE = { SR = 100, MS = 100, OS = 50, TM = 25 }
 local OPEN_CATEGORY_BY_RANGE = { [100] = "MS", [50] = "OS", [25] = "TM" }
 Rolls.RANGE = RANGE
 
+-- Wählbare Würfelzeiten in Sekunden (0 = Raidlead beendet)
+Rolls.DURATIONS = { 0, 15, 20, 30, 45, 60, 90, 120 }
+
+function Rolls.DurationText(seconds)
+    return seconds == 0 and "Manuell (Raidlead beendet)" or (seconds .. " Sekunden")
+end
+
 -- Chat-Befehl für eine Kategorie, z. B. "/roll 50"
 function Rolls.RollCommand(category)
     local max = RANGE[category] or 100

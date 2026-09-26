@@ -118,11 +118,16 @@ local function sendPlayers(players)
     for _, player in ipairs(players) do
         if not isFakePlayer(s, player) then
             local entry = player .. "=" .. table.concat(ns.Session:GetReservedItemIDs(player), ",")
-            if length + #entry + 1 > MAX_LEN then
-                flush()
+            if #head + #entry > MAX_LEN then
+                -- z. B. ein Import mit sehr vielen Items: passt in keine Nachricht
+                ns.Debug("Comm", "Reserves zu lang für eine Nachricht, nicht gesendet:", player, #entry)
+            else
+                if length + #entry + 1 > MAX_LEN then
+                    flush()
+                end
+                table.insert(chunk, entry)
+                length = length + #entry + 1
             end
-            table.insert(chunk, entry)
-            length = length + #entry + 1
         end
     end
     flush()

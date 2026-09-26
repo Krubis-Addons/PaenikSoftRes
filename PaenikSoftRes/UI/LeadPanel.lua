@@ -50,7 +50,14 @@ local function isInstanceSelected(instance)
 end
 
 local function selectInstance(instance)
-    ns.Session:SetRules({ instanceKey = instance.fullKey, instanceName = instance.name })
+    local s = ns.Session:Get()
+    if s and s.instanceKey == instance.fullKey then return end
+    -- Die Dropdown-Auswahl bleibt bis zur Bestätigung auf der alten Instanz
+    UI.Confirm("Instanz wechseln zu „" .. instance.name .. "“?\nAlle bisherigen Reserves werden verworfen.",
+        function()
+            ns.Session:SetRules({ instanceKey = instance.fullKey, instanceName = instance.name })
+        end,
+        s ~= nil and next(s.reserves) ~= nil)
 end
 
 instanceDropdown:SetupMenu(function(_, root)
@@ -116,22 +123,16 @@ local lockButton = UI.CreateButton(rules, "Sperren", 140, function()
 end)
 lockButton:SetPoint("TOPLEFT", lockText, "BOTTOMLEFT", 0, -8)
 
--- Würfelzeit: Zeitfenster für Würfelrunden (persönliche Einstellung des Raidleads)
-local ROLL_DURATIONS = { 0, 15, 20, 30, 45, 60, 90, 120 }
-
+-- Würfelzeit: Zeitfenster für Würfelrunden (persönliche Einstellung des Raidleads, auch in den Optionen)
 local durationLabel = createLabel("Würfelzeit:", lockButton, -18)
 
 local durationDropdown = CreateFrame("DropdownButton", nil, rules, "WowStyle1DropdownTemplate")
 durationDropdown:SetWidth(160)
 durationDropdown:SetPoint("LEFT", durationLabel, "RIGHT", 0, 0)
 
-local function durationText(seconds)
-    return seconds == 0 and "Manuell (Raidlead beendet)" or (seconds .. " Sekunden")
-end
-
 durationDropdown:SetupMenu(function(_, root)
-    for _, seconds in ipairs(ROLL_DURATIONS) do
-        root:CreateRadio(durationText(seconds),
+    for _, seconds in ipairs(ns.Rolls.DURATIONS) do
+        root:CreateRadio(ns.Rolls.DurationText(seconds),
             function(value) return ((ns.db and ns.db.rollDuration) or 0) == value end,
             function(value)
                 ns.db.rollDuration = value
@@ -146,12 +147,16 @@ durationHint:SetText("Mit Zeitfenster endet die Runde automatisch; vorzeitiges B
 
 -- Unten: Sitzung neu starten / verwerfen
 local restartButton = UI.CreateButton(rules, "Neu starten", 140, function()
-    ns.Session:New(ns.FullName("player"))
+    UI.Confirm("Neue Sitzung starten?\nAlle Reserves, Regeln und der Verlauf werden verworfen.", function()
+        ns.Session:New(ns.FullName("player"))
+    end, UI.SessionHasData())
 end)
 restartButton:SetPoint("BOTTOMLEFT", rules, "BOTTOMLEFT", 0, 4)
 
 local resetButton = UI.CreateButton(rules, "Sitzung verwerfen", 140, function()
-    ns.Session:Reset()
+    UI.Confirm("Sitzung verwerfen?\nReserves und Verlauf gehen verloren, die Gruppe wird informiert.", function()
+        ns.Session:Reset()
+    end)
 end)
 resetButton:SetPoint("LEFT", restartButton, "RIGHT", 8, 0)
 

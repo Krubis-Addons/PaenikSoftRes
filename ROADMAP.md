@@ -3,11 +3,16 @@
 | # | Iteration | Inhalt |
 |---|---|---|
 | 2 | Datenmodell, Rollen, UI-Gerüst, API-Probe | Sitzung + Reserve-API, Rollenerkennung, Fenster mit Tabs, `/paeniksoftres probe` |
-| 3 | Raidlead: Regeln | Instanzauswahl über Provider-Schicht (`Data/LootData.lua`): EJ-Provider (in der Beta leer, `EncounterJournalDisabled=1`) + eigene Tabellen (Start: Molten Core). Max. SRs (1–5), doppelte Items, Sitzung sperren/öffnen. Schwierigkeitsgrade entfallen vorerst. |
-| 4 | Raider: Auswahl + Sync | Raider-Tab mit Boss-Filter und Item-Liste (Klick = reservieren), Übersicht-Tab (Reserves pro Item), Sync-Protokoll `PSR` (`R`/`F`/`P`/`E`/`Q`/`S`/`X`) mit Sende-Queue (Throttle/Lockdown), Sitzungsübernahme bei Wechsel der Gruppenleitung. |
-| 5 | Loot-Anzeige | Panel neben dem Lootfenster (`UI/LootPanel.lua`, ab Qualität „Ungewöhnlich“) mit SR-Inhabern (grün = ich, grau = nicht in der Gruppe), „Ansagen“/„Alle ansagen“ für den Raidlead im Gruppenchat; Tooltip-Zeile „Soft Reserve“ über `TooltipDataProcessor`. |
-| 6 | Roll-Runden | `Rolls.lua` + `UI/RollFrames.lua`: Raidlead startet per „Würfeln“ im Loot-Panel oder `/paeniksoftres roll <Item>`. SR-Runde (nur SR-Inhaber) bzw. offene Runde (MS > OS > Transmog), Popup mit Kategorie-Buttons → `RandomRoll(1,100)`; Lead liest Würfe aus `CHAT_MSG_SYSTEM` (lokalisiertes `RANDOM_ROLL_RESULT`, Namen über die Gruppe aufgelöst), Leitfenster mit Rangliste, Beenden/Abbrechen, Nachwurf bei Gleichstand, Verlauf im Übersicht-Tab. Würfelzeit (Raidlead-Tab, `db.rollDuration`, 0 = manuell) beendet automatisch; passen alle anwesenden Berechtigten oder läuft die Zeit ohne Wurf ab → freier Wurf. Der Start sagt die Berechtigten im Chat an (kein separates „Ansagen“ mehr). |
-| 7 | softres.it-Import | `Import.lua` + `UI/ImportDialog.lua`: CSV-Export von softres.it (Kopfzeile ItemId,Name,…) einfügen, Vorschau (Spieler, Reserves, nicht in Gruppe/Instanz), „Ersetzen“ oder „Zusammenführen“ (Mischbetrieb). Namen über `ns.ResolvePlayerName` den Gruppenmitgliedern zugeordnet, Quelle `softres` (Übersicht hellblau). Offen: „Gargul Export“ (Base64+zlib+JSON, bräuchte LibDeflate). |
-| 8 | Feinschliff | Minimap-/Addon-Compartment-Button, Optionen, Review mit `wow-reviewer`, `.toc`-Metadaten. |
+| 3 | Raidlead: Regeln | Instanzauswahl über Provider-Schicht (`Data/LootData.lua`): EJ-Provider (in der Beta leer, `EncounterJournalDisabled=1`) + eigene Tabellen. Max. SRs (1–5), doppelte Items, Sitzung sperren/öffnen. Schwierigkeitsgrade entfallen vorerst. |
+| 4 | Raider: Auswahl + Sync | Raider-Tab mit Bossliste (Porträts) und Item-Liste (Klick = reservieren), Übersicht-Tab (Reserves pro Item), Sync-Protokoll `PSR` (`R`/`F`/`P`/`E`/`Q`/`S`/`X`) mit Sende-Queue (Throttle/Lockdown), Sitzungsübernahme bei Wechsel der Gruppenleitung. |
+| 5 | Loot-Anzeige | Panel neben dem Lootfenster (`UI/LootPanel.lua`, ab Qualität „Ungewöhnlich“, verschiebbar) mit SR-Inhabern und Gewinnern; Tooltip-Zeile „Soft Reserve“ über `TooltipDataProcessor`. |
+| 6 | Roll-Runden | `Rolls.lua` + `UI/RollFrames.lua`: SR-Runde bzw. offene Runde, Kategorie über Würfelbereich (MS 100, OS 50, Transmog 25), Würfelzeit, freier Wurf wenn alle Berechtigten passen, Nachwurf bei Gleichstand, Verlauf. |
+| 7 | softres.it-Import | `Import.lua` + `UI/ImportDialog.lua`: CSV-Export von softres.it, Vorschau, „Ersetzen“ oder „Zusammenführen“ (Mischbetrieb), Quelle `softres` (Übersicht hellblau). |
+| 8 | Feinschliff | Bestätigungsdialoge (`UI.Confirm`), Optionen-Seite im Blizzard-Menü (`UI/Options.lua`), Debug-Log und Testbefehle standardmäßig aus, Gargul-Export-Import (LibDeflate in `Libs/`), Forever-Dungeons als Testdaten (`Data/Instances/ForeverDungeons.lua`), Gesamt-Review mit `wow-reviewer` und dessen Befunde behoben. |
 
-Status: Iterationen 1–7 umgesetzt. Offen aus Iteration 3: Bestätigungsdialog vor „Neu starten“/Instanzwechsel, wenn schon Reserves existieren; weitere Instanz-Tabellen, sobald klar ist, welche Inhalte Forever hat.
+Status: Iterationen 1–8 umgesetzt.
+
+Offen / später:
+- Encounter-Journal-Provider (`Data/EJProvider.lua`), sobald Blizzard das EJ in Forever aktiviert: Loot nachladen (`EJ_LOOT_DATA_RECIEVED` → Anzeige-Cache leeren), `EJ_ResetLootFilter()` vor dem Auslesen, Instanzliste cachen.
+- Weitere Instanz-Tabellen, sobald klar ist, welche Raids Forever zum Launch hat.
+- Tests in einer echten Gruppe: Sync zwischen zwei Spielern, fremde Namen, Gleichstand/Nachwurf, Loot-Panel an einer echten Leiche.

@@ -3,7 +3,8 @@ local addonName, ns = ...
 
 local MAX_ENTRIES = 500
 local entries = {}
-ns.debugEnabled = true -- für Releases auf false setzen oder per Slash-Befehl umschalten
+-- In der Ladephase immer an; nach ADDON_LOADED gilt die Einstellung db.debug (Core.lua, Standard aus)
+ns.debugEnabled = true
 
 local function safeToString(v)
     if issecretvalue and issecretvalue(v) then

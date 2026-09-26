@@ -226,7 +226,12 @@ local function refreshMyReserves(s)
     end
     myHeader:SetText(text)
 
-    local shown = math.max(s.maxReserves, #list)
+    -- Höchstens so viele Zeilen wie vorhanden (ein Import kann mehr Reserves bringen als das Limit)
+    local shown = math.min(#myRows, math.max(s.maxReserves, #list))
+    if #list > #myRows then
+        myHeader:SetText(myHeader:GetText() .. string.format("  |cff999999(+%d weitere, siehe Übersicht)|r",
+            #list - #myRows))
+    end
     for i, row in ipairs(myRows) do
         local itemID = list[i]
         row:SetShown(i <= shown)

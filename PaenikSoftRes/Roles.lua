@@ -32,13 +32,24 @@ local function checkRole()
 end
 
 function ns:GROUP_ROSTER_UPDATE()
+    ns.InvalidateRoster() -- Namens-Nachschlagetabellen in Core.lua neu aufbauen
     checkRole()
+    ns:Fire("ROSTER_CHANGED")
 end
 
 function ns:PARTY_LEADER_CHANGED()
     checkRole()
 end
 
-ns:On("LOGIN", checkRole)
+-- Namen können nach dem Beitritt noch unbekannt sein und später nachgeliefert werden
+function ns:UNIT_NAME_UPDATE()
+    ns.InvalidateRoster()
+end
+
+ns:On("LOGIN", function()
+    ns.InvalidateRoster()
+    checkRole()
+end)
 ns:RegisterEvent("GROUP_ROSTER_UPDATE")
 ns:RegisterEvent("PARTY_LEADER_CHANGED")
+ns:RegisterEvent("UNIT_NAME_UPDATE")

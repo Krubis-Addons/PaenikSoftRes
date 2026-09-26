@@ -51,14 +51,19 @@ button:SetScript("OnDragStop", function(self)
     ns.Debug("Minimap", "Position", ns.db.minimap.angle)
 end)
 
-button:SetScript("OnClick", function()
-    ns.ToggleMainFrame()
+button:SetScript("OnClick", function(_, mouseButton)
+    if mouseButton == "RightButton" then
+        ns.OpenOptions()
+    else
+        ns.ToggleMainFrame()
+    end
 end)
 
 button:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:SetText(ns.TITLE)
     GameTooltip:AddLine("Klick: Fenster öffnen/schließen", 1, 1, 1)
+    GameTooltip:AddLine("Rechtsklick: Optionen", 1, 1, 1)
     GameTooltip:AddLine("Ziehen: Button verschieben", 1, 1, 1)
     GameTooltip:Show()
 end)

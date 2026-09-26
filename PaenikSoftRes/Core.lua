@@ -8,6 +8,7 @@ local DB_VERSION = 1
 local defaults = {
     version = DB_VERSION,
     showOnLogin = true,
+    debug = false, -- Debug-Log und Testbefehle (Optionen oder /paeniksoftres debug)
     -- forceRole: nil = automatisch, "lead" oder "raider" (zum Testen)
     -- session: aktuelle Soft-Reserve-Sitzung, siehe Session.lua
 }
@@ -58,17 +59,24 @@ local function normalizeRealm(realm)
     return realm and (realm:gsub("[%s%-]", "")) or nil
 end
 
+-- Secret Values zuerst prüfen: schon ein Wahrheitstest auf einem Secret wirft einen Fehler.
+local function isSecret(value)
+    return issecretvalue ~= nil and issecretvalue(value)
+end
+ns.IsSecret = isSecret
+ns.NormalizeRealm = normalizeRealm
+
 function ns.FullName(unit)
     unit = unit or "player"
     local name, second = UnitName(unit)
-    if not name or (issecretvalue and (issecretvalue(name) or issecretvalue(second))) then
+    if isSecret(name) or isSecret(second) or not name then
         return nil
     end
     local realm
     local guid = UnitGUID(unit)
-    if guid and not (issecretvalue and issecretvalue(guid)) then
+    if not isSecret(guid) and guid then
         local _, _, _, _, _, _, guidRealm = GetPlayerInfoByGUID(guid)
-        if guidRealm and guidRealm ~= "" and not (issecretvalue and issecretvalue(guidRealm)) then
+        if not isSecret(guidRealm) and guidRealm and guidRealm ~= "" then
             realm = normalizeRealm(guidRealm)
         end
     end
@@ -95,37 +103,41 @@ function ns:ADDON_LOADED(name)
     ns.db = PaenikSoftResDB
     eventFrame:UnregisterEvent("ADDON_LOADED")
     ns.Debug("Core", "Datenbank initialisiert, Sitzung vorhanden:", ns.db.session ~= nil)
+    -- Bis hierher wurde immer protokolliert (Ladephase), ab jetzt gilt die Einstellung
+    ns.debugEnabled = ns.db.debug
+    if not ns.db.debug and ns.db.forceRole then
+        ns.db.forceRole = nil
+    end
     ns:Fire("DB_READY")
 end
 
--- Gruppen-Unit zu einem "Name-Realm" suchen (nil, wenn nicht in der Gruppe).
-function ns.UnitForName(fullName)
-    if fullName == ns.FullName("player") then
-        return "player"
-    end
-    local prefix, count
-    if IsInRaid and IsInRaid() then
-        prefix, count = "raid", 40
-    elseif IsInGroup and IsInGroup() then
-        prefix, count = "party", 4
-    else
-        return nil
-    end
-    for i = 1, count do
-        local unit = prefix .. i
-        if UnitExists(unit) and ns.FullName(unit) == fullName then
-            return unit
+-- Gruppenliste als Nachschlagetabellen, neu aufgebaut nach GROUP_ROSTER_UPDATE (Roles.lua) bzw. Login.
+--   byKey  ["Name-Realm"] = unit
+--   byName [kleingeschriebener Name/Vorname/Name-Realm] = Schlüssel, false = mehrdeutig
+local roster
+
+local function buildRoster()
+    roster = { byKey = {}, byName = {} }
+    local function add(unit)
+        local key = ns.FullName(unit)
+        if not key then return end
+        roster.byKey[key] = unit
+        local first = UnitName(unit)
+        local aliases = { key, key:match("^(.*)%-[^%-]+$"), (not isSecret(first)) and first or nil }
+        for i = 1, 3 do
+            local alias = aliases[i]
+            if alias then
+                alias = alias:lower()
+                local existing = roster.byName[alias]
+                if existing == nil then
+                    roster.byName[alias] = key
+                elseif existing ~= key then
+                    roster.byName[alias] = false
+                end
+            end
         end
     end
-end
-
--- Einen Namen (z. B. aus einer Würfelnachricht oder einem softres.it-Import) einem
--- Gruppenmitglied zuordnen. Erlaubt "Vorname", "Vorname Nachname" oder "Name-Realm"
--- (Forever-Nachnamen), ohne Groß-/Kleinschreibung. Nur eindeutige Treffer zählen.
-function ns.ResolvePlayerName(name)
-    if not name or name == "" then return nil end
-    local wanted = name:lower()
-    local units = { "player" }
+    add("player")
     local prefix, count
     if IsInRaid and IsInRaid() then
         prefix, count = "raid", 40
@@ -134,27 +146,36 @@ function ns.ResolvePlayerName(name)
     end
     if prefix then
         for i = 1, count do
-            if UnitExists(prefix .. i) and not UnitIsUnit(prefix .. i, "player") then
-                table.insert(units, prefix .. i)
+            local unit = prefix .. i
+            if UnitExists(unit) and not UnitIsUnit(unit, "player") then
+                add(unit)
             end
         end
     end
-    local found
-    for _, unit in ipairs(units) do
-        local key = ns.FullName(unit)
-        if key then
-            local base = key:match("^(.*)%-[^%-]+$") or key -- ohne Realm
-            local first = UnitName(unit)
-            if wanted == key:lower() or wanted == base:lower() or wanted == (first or ""):lower() then
-                if found and found ~= key then
-                    ns.Debug("Core", "Name mehrdeutig:", name, found, key)
-                    return nil
-                end
-                found = key
-            end
-        end
+end
+
+function ns.InvalidateRoster()
+    roster = nil
+end
+
+-- Gruppen-Unit zu einem "Name-Realm" suchen (nil, wenn nicht in der Gruppe; "player" für mich).
+function ns.UnitForName(fullName)
+    if not roster then buildRoster() end
+    return roster.byKey[fullName]
+end
+
+-- Einen Namen (z. B. aus einer Würfelnachricht oder einem softres.it-Import) einem
+-- Gruppenmitglied zuordnen. Erlaubt "Vorname", "Vorname Nachname" oder "Name-Realm"
+-- (Forever-Nachnamen), ohne Groß-/Kleinschreibung. Nur eindeutige Treffer zählen.
+function ns.ResolvePlayerName(name)
+    if isSecret(name) or not name or name == "" then return nil end
+    if not roster then buildRoster() end
+    local key = roster.byName[name:lower()]
+    if key == false then
+        ns.Debug("Core", "Name mehrdeutig:", name)
+        return nil
     end
-    return found
+    return key
 end
 
 -- Chat-Kanal der aktuellen Gruppe (nil ohne Gruppe)
@@ -219,6 +240,26 @@ local function setForceRole(role)
     ns.Print("Rolle " .. (role or "automatisch"))
 end
 
+-- Debug-Log und Testbefehle ein-/ausschalten (Einstellung db.debug, Standard aus)
+function ns.SetDebug(enabled)
+    ns.db.debug = enabled and true or false
+    ns.debugEnabled = ns.db.debug
+    if not ns.db.debug and ns.db.forceRole then
+        setForceRole(nil) -- erzwungene Testrolle nicht still weiterlaufen lassen
+    end
+    ns.Print("Debug-Log und Testbefehle " .. (ns.db.debug and "an" or "aus"))
+end
+
+-- Testbefehle nur mit aktivem Debug
+local TEST_COMMANDS = {
+    lead = function() setForceRole("lead") end,
+    raider = function() setForceRole("raider") end,
+    auto = function() setForceRole(nil) end,
+    loottest = function() ns.ShowLootTest() end,
+    fake = function() ns.AddFakeReserves() end,
+    probe = function() ns.RunProbe() end,
+}
+
 SLASH_PAENIKSOFTRES1 = "/paeniksoftres"
 SlashCmdList.PAENIKSOFTRES = function(msg)
     local raw = strtrim(msg or "")
@@ -229,34 +270,34 @@ SlashCmdList.PAENIKSOFTRES = function(msg)
         frame:Show()
     elseif msg == "hide" then
         frame:Hide()
+    elseif msg == "" or msg == "toggle" then
+        frame:SetShown(not frame:IsShown())
+    elseif msg == "options" or msg == "optionen" then
+        ns.OpenOptions()
     elseif msg == "minimap" then
         local hidden = ns.db.minimap.hide
         ns.SetMinimapButtonShown(hidden)
         ns.Print("Minimap-Button " .. (hidden and "an" or "aus"))
-    elseif msg == "" or msg == "toggle" then
-        frame:SetShown(not frame:IsShown())
     elseif msg == "debug" then
-        ns.debugEnabled = not ns.debugEnabled
-        ns.Print("Debug " .. (ns.debugEnabled and "an" or "aus"))
-    elseif msg == "lead" or msg == "raider" then
-        setForceRole(msg)
-    elseif msg == "auto" then
-        setForceRole(nil)
+        ns.SetDebug(not ns.db.debug)
     elseif msg == "roll" then
         ns.StartRollFromSlash(rest)
-    elseif msg == "loottest" then
-        ns.ShowLootTest()
     elseif msg == "lootpanel" and rest:lower() == "reset" then
-        ns.db.lootPanelPos = nil
+        ns.ResetLootPanelPosition()
         ns.Print("Loot-Panel dockt wieder am Lootfenster an.")
     elseif msg == "lootpanel" then
         ns.db.lootPanel = not ns.db.lootPanel
         ns.Print("Loot-Panel " .. (ns.db.lootPanel and "an" or "aus"))
-    elseif msg == "fake" then
-        ns.AddFakeReserves()
-    elseif msg == "probe" then
-        ns.RunProbe()
+    elseif TEST_COMMANDS[msg] then
+        if ns.db.debug then
+            TEST_COMMANDS[msg]()
+        else
+            ns.Print("Testbefehl – erst mit /paeniksoftres debug freischalten.")
+        end
     else
-        ns.Print("Befehle: show, hide, toggle, minimap, roll <Item>, lootpanel [reset], loottest, lead, raider, auto, probe, fake, debug")
+        ns.Print("Befehle: show, hide, toggle, options, minimap, roll <Item>, lootpanel [reset], debug")
+        if ns.db.debug then
+            ns.Print("Testbefehle: probe, fake, loottest, lead, raider, auto")
+        end
     end
 end

@@ -194,13 +194,28 @@ function Session:ValidateReserves(itemIDs, player)
         return false, "Limit erreicht (" .. s.maxReserves .. ")"
     end
     local itemSet = self:GetInstanceItemSet() or {}
+    -- Items, die der Spieler schon hat (z. B. aus einem softres.it-Import mit eigenen Regeln),
+    -- bleiben erlaubt – sonst könnte er seine Liste nicht mehr bearbeiten.
+    local existing = {}
+    if player then
+        for _, itemID in ipairs(self:GetReservedItemIDs(player)) do
+            existing[itemID] = (existing[itemID] or 0) + 1
+        end
+    end
     local seen = {}
     for _, itemID in ipairs(itemIDs) do
-        if type(itemID) ~= "number" or not itemSet[itemID] then
-            return false, "Item gehört nicht zur Instanz: " .. tostring(itemID)
+        if type(itemID) ~= "number" then
+            return false, "Ungültige ItemID: " .. tostring(itemID)
         end
-        if seen[itemID] and not s.allowDuplicates then
-            return false, "Item darf nur einmal reserviert werden"
+        if (existing[itemID] or 0) > 0 then
+            existing[itemID] = existing[itemID] - 1
+        else
+            if not itemSet[itemID] then
+                return false, "Item gehört nicht zur Instanz: " .. itemID
+            end
+            if seen[itemID] and not s.allowDuplicates then
+                return false, "Item darf nur einmal reserviert werden"
+            end
         end
         seen[itemID] = true
     end
@@ -234,7 +249,9 @@ end
 -- reserves = { ["Name-Realm"] = { itemID, ... } }; replaceAll = true verwirft alle bisherigen Reserves,
 -- sonst werden nur die Listen der importierten Spieler ersetzt (Mischbetrieb mit Ingame-Reserves).
 -- Limits und Instanz werden bewusst nicht geprüft: die externe Quelle hat ihre eigenen Regeln.
-function Session:ImportReserves(reserves, source, replaceAll)
+-- importNames (optional) = { [vorläufiger Schlüssel] = Name aus dem Export } für Spieler, die noch
+-- keinem Gruppenmitglied zugeordnet werden konnten (siehe ResolveImportedPlayers).
+function Session:ImportReserves(reserves, source, replaceAll, importNames)
     local s = self:Get()
     if not s then return false, "Keine Sitzung" end
     if not self:IsOwner() then return false, "Sitzung gehört " .. tostring(s.leader) end
@@ -243,9 +260,10 @@ function Session:ImportReserves(reserves, source, replaceAll)
     end
     local players, count = 0, 0
     for player, itemIDs in pairs(reserves) do
+        local importName = importNames and importNames[player]
         local list = {}
         for i, itemID in ipairs(itemIDs) do
-            list[i] = { itemID = itemID, source = source }
+            list[i] = { itemID = itemID, source = source, importName = importName }
         end
         s.reserves[player] = #list > 0 and list or nil
         players = players + 1
@@ -253,8 +271,52 @@ function Session:ImportReserves(reserves, source, replaceAll)
     end
     changed("Import", source, players, "Spieler", count, "Reserves", replaceAll and "ersetzt" or "zusammengeführt")
     ns:Fire("SESSION_FULL_SYNC")
+    self:ResolveImportedPlayers()
     return true, players, count
 end
+
+-- Importierte Spieler mit vorläufigem Schlüssel dem echten Gruppenmitglied zuordnen, sobald es
+-- in der Gruppe ist (Import vor dem Einladen; Forever-Nachnamen fehlen im Export).
+function Session:ResolveImportedPlayers()
+    local s = self:Get()
+    if not s or not self:IsOwner() then return end
+    local moves = {}
+    for player, list in pairs(s.reserves) do
+        local importName = list[1] and list[1].importName
+        if importName then
+            local real = ns.ResolvePlayerName(importName)
+            if real and real ~= player then
+                table.insert(moves, { from = player, to = real })
+            elseif real then
+                for _, entry in ipairs(list) do
+                    entry.importName = nil
+                end
+            end
+        end
+    end
+    for _, move in ipairs(moves) do
+        local list = s.reserves[move.from]
+        s.reserves[move.from] = nil
+        for _, entry in ipairs(list) do
+            entry.importName = nil
+        end
+        if s.reserves[move.to] then
+            -- Der Spieler hat schon eigene Reserves: der Import ergänzt sie
+            for _, entry in ipairs(list) do
+                table.insert(s.reserves[move.to], entry)
+            end
+        else
+            s.reserves[move.to] = list
+        end
+        changed("Import zugeordnet", move.from, "->", move.to)
+        ns:Fire("SESSION_RESERVES_CHANGED", move.from) -- leert den vorläufigen Eintrag bei den Raidern
+        ns:Fire("SESSION_RESERVES_CHANGED", move.to)
+    end
+end
+
+ns:On("ROSTER_CHANGED", function()
+    Session:ResolveImportedPlayers()
+end)
 
 -- Übernahme der Regeln vom Raidlead (Spiegel der Master-Liste).
 function Session:ApplyRemoteSession(info)

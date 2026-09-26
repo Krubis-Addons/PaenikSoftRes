@@ -83,6 +83,15 @@ function UI.CreateScrollList(parent, rowHeight, initializer)
     view:SetElementExtent(rowHeight)
     view:SetElementInitializer("Button", initializer)
     ScrollUtil.InitScrollBoxListWithScrollBar(scrollBox, scrollBar, view)
+    -- Wurde die Liste im selben Moment eingeblendet und befüllt, ist ihre Größe evtl. noch nicht
+    -- berechnet und es erscheinen keine Zeilen. Einen Frame später mit gültiger Größe neu aufbauen.
+    scrollBox:HookScript("OnShow", function(self)
+        C_Timer.After(0, function()
+            if self:IsVisible() then
+                self:FullUpdate(ScrollBoxConstants.UpdateImmediately)
+            end
+        end)
+    end)
     return scrollBox
 end
 
@@ -153,6 +162,56 @@ function UI.FormatHolders(itemID)
         parts[i] = entry.text
     end
     return table.concat(parts, ", "), total
+end
+
+-- Bestätigungsdialog (eigener Frame statt StaticPopupDialogs: keine Blizzard-Globals verändern)
+local confirmFrame = CreateFrame("Frame", nil, UIParent, "BasicFrameTemplateWithInset")
+confirmFrame:SetSize(380, 150)
+confirmFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
+confirmFrame:SetFrameStrata("FULLSCREEN_DIALOG")
+confirmFrame:SetToplevel(true)
+confirmFrame:EnableMouse(true)
+confirmFrame.TitleText:SetText("Bitte bestätigen")
+confirmFrame:Hide()
+
+local confirmText = confirmFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+confirmText:SetPoint("TOPLEFT", confirmFrame, "TOPLEFT", 16, -36)
+confirmText:SetPoint("BOTTOMRIGHT", confirmFrame, "BOTTOMRIGHT", -16, 44)
+confirmText:SetJustifyH("CENTER")
+confirmText:SetJustifyV("MIDDLE")
+
+local confirmAction
+local confirmYes = UI.CreateButton(confirmFrame, "Ja", 120, function()
+    local action = confirmAction
+    confirmAction = nil
+    confirmFrame:Hide()
+    if action then action() end
+end)
+confirmYes:SetPoint("BOTTOMRIGHT", confirmFrame, "BOTTOM", -6, 12)
+local confirmNo = UI.CreateButton(confirmFrame, "Abbrechen", 120, function()
+    confirmAction = nil
+    confirmFrame:Hide()
+end)
+confirmNo:SetPoint("BOTTOMLEFT", confirmFrame, "BOTTOM", 6, 12)
+confirmFrame:SetScript("OnHide", function()
+    confirmAction = nil
+end)
+
+-- Fragt nach und führt onAccept nur bei „Ja“ aus. Ohne Nachfrage, wenn condition == false.
+function UI.Confirm(text, onAccept, condition)
+    if condition == false then
+        onAccept()
+        return
+    end
+    confirmText:SetText(text)
+    confirmFrame:Show()
+    confirmAction = onAccept -- nach Show: OnHide eines alten Dialogs räumt sonst auf
+end
+
+-- Hat die Sitzung Reserves oder vergebene Items? (für Rückfragen)
+function UI.SessionHasData()
+    local s = ns.Session:Get()
+    return s ~= nil and (next(s.reserves) ~= nil or (s.history ~= nil and #s.history > 0))
 end
 
 -- Farbcodes entfernen (Chat erlaubt nur Links)

@@ -129,7 +129,7 @@ local function readLoot()
     wipe(lootItems)
     for slot = 1, GetNumLootItems() do
         local link = GetLootSlotLink(slot)
-        if link and not (issecretvalue and issecretvalue(link)) then
+        if not ns.IsSecret(link) and link then
             local _, _, _, _, quality = GetLootSlotInfo(slot)
             local itemID = C_Item.GetItemInfoInstant(link)
             if itemID and (quality == nil or quality >= MIN_QUALITY) then
@@ -137,7 +137,7 @@ local function readLoot()
                 local lootKey
                 if type(GetLootSourceInfo) == "function" then
                     local guid = GetLootSourceInfo(slot)
-                    if guid and not (issecretvalue and issecretvalue(guid)) then
+                    if not ns.IsSecret(guid) and guid then
                         lootKey = guid .. ":" .. itemID
                     end
                 end
@@ -191,13 +191,23 @@ function ns:LOOT_CLOSED()
     panel:Hide()
 end
 
-local function refreshIfShown()
+-- entprellt: ein voller Stand vom Raidlead löst viele SESSION_CHANGED aus
+local refreshIfShown = UI.Debounce(function()
     if panel:IsShown() then
         refresh()
     end
-end
+end)
 ns:On("SESSION_CHANGED", refreshIfShown)
 ns:On("ROLL_CHANGED", refreshIfShown)
+ns:On("ROSTER_CHANGED", refreshIfShown)
+
+-- Gespeicherte Position verwerfen und (falls offen) sofort wieder am Lootfenster andocken
+function ns.ResetLootPanelPosition()
+    ns.db.lootPanelPos = nil
+    if panel:IsShown() then
+        anchorPanel()
+    end
+end
 
 ns:On("DB_READY", function()
     if ns.db.lootPanel == nil then
