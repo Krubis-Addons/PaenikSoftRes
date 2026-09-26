@@ -10,8 +10,11 @@
 --   1^H^sid^leeren(1/0)^itemID=Notiz;...              Lead → Gruppe: Hard Reserves
 --   1^E^sid                                           Lead → Gruppe: Sitzung beendet
 --   1^Q                                               Raider → Gruppe: Stand anfordern
---   1^S^sid^id,id                                     Raider → Lead (Whisper): eigene Reserves
---   1^X^sid^Text                                      Lead → Raider (Whisper): abgelehnt
+--   1^S^sid^id,id                                     Raider → Lead (gezielt): eigene Reserves
+--   1^X^sid^Text                                      Lead → Raider (gezielt): abgelehnt
+-- „Gezielt“ heißt: 1^@^Empfänger^Typ^... über Gruppe (Empfänger in der Gruppe) bzw. Gilde, nie WHISPER
+-- (Whisper-Ziele mit Forever-Nachnamen kamen nicht an). Auch GuildSync und Rolls nutzen das über
+-- Comm:SendWhisper / SendWhisperThen.
 local _, ns = ...
 
 local Comm = {}
@@ -107,6 +110,30 @@ end
 
 local function send(chatType, target, ...)
     queueMessage(chatType, target, nil, ...)
+end
+
+-- Gezielte Nachricht an einen Spieler. Kein WHISPER: dessen Zielname ist bei Forever-Nachnamen
+-- unzuverlässig (im Gruppentest kamen Whisper-Nachrichten nie an). Stattdessen über Gruppe bzw.
+-- Gilde mit Empfängerfeld:
+--   1^@^Empfänger^Typ^...   – nur der Empfänger verarbeitet sie (siehe CHAT_MSG_ADDON)
+-- Gibt false zurück, wenn der Empfänger über keinen Kanal erreichbar ist.
+local function directedChannel(target)
+    if unitForName(target) then
+        return groupChannel()
+    end
+    if IsInGuild and IsInGuild() then
+        return "GUILD"
+    end
+end
+
+local function sendTo(target, onSent, ...)
+    local channel = directedChannel(target)
+    if not channel then
+        ns.Debug("Comm", "Empfänger nicht erreichbar (weder Gruppe noch Gilde):", target)
+        return false
+    end
+    queueMessage(channel, nil, onSent, "@", target, ...)
+    return true
 end
 
 -- Lead: Nachrichten bauen -------------------------------------------------
@@ -302,12 +329,15 @@ function Comm:SubmitOwnReserves(itemIDs)
         ns.char.signups[s.id] = nil
     end
 
+    if not directedChannel(s.leader) then
+        return false, "Raidlead nicht erreichbar (nicht in Gruppe oder Gilde)"
+    end
     pendingOwn = CopyTable(itemIDs)
     if requestTimer then
         requestTimer:Cancel()
         requestTimer = nil
     end
-    queueMessage("WHISPER", s.leader, function()
+    sendTo(s.leader, function()
         -- Timeout erst ab dem tatsächlichen Senden
         if requestTimer then
             requestTimer:Cancel()
@@ -445,12 +475,13 @@ function handlers.S(sender, f)
         return
     end
     if not unitForName(sender) then
-        send("WHISPER", sender, "X", f[3], "Nicht in der Gruppe")
+        ns.Debug("Comm", "S abgelehnt, Absender nicht in der Gruppe:", sender)
+        sendTo(sender, nil, "X", f[3], "Nicht in der Gruppe")
         return
     end
     local ok, err = ns.Session:SetPlayerReserves(sender, parseItemIDs(f[4]))
     if not ok then
-        send("WHISPER", sender, "X", f[3], sanitize(err))
+        sendTo(sender, nil, "X", f[3], sanitize(err))
         -- aktuellen Stand zurückschicken, damit der Raider synchron bleibt
         pendingPlayers[sender] = true
         scheduleFlush()
@@ -487,6 +518,12 @@ function ns:CHAT_MSG_ADDON(prefix, text, _, sender)
         ns.Debug("Comm", "Unbekannte Version von", sender, f[1])
         return
     end
+    -- Gezielte Nachricht (1^@^Empfänger^Typ^...): nur für uns bestimmt, sonst ignorieren
+    if f[2] == "@" then
+        if (f[3] or ""):lower() ~= ns.FullName("player"):lower() then return end
+        table.remove(f, 2)
+        table.remove(f, 2)
+    end
     ns.Debug("Comm", "<-", sender, text)
     local handler = handlers[f[2]]
     if handler then
@@ -522,7 +559,7 @@ function Comm:SendGroup(...)
 end
 
 function Comm:SendWhisper(target, ...)
-    send("WHISPER", target, ...)
+    return sendTo(target, nil, ...)
 end
 
 -- Nachricht an alle Online-Gildenmitglieder mit Addon (unsichtbar, kein Chat)
@@ -544,7 +581,7 @@ function Comm:SendRaw(prefix, chatType, text)
 end
 
 function Comm:SendWhisperThen(target, onSent, ...)
-    queueMessage("WHISPER", target, onSent, ...)
+    return sendTo(target, onSent, ...)
 end
 
 -- handler(sender, fields); fields[1] = Version, fields[2] = Typ, ab fields[3] die Daten
