@@ -313,6 +313,31 @@ end
 local lootHeader = UI.CreateText(content, nil, nil, "GameFontNormal")
 
 -- Rechtsklick auf ein Item: Wunschliste (alle); Raidlead der eigenen Sitzung zusätzlich Hard Reserve
+-- Raidlead: Reserve für einen Spieler eintragen (Name = Gruppenschlüssel oder freie Eingabe)
+local function reserveForPlayer(s, itemID, name)
+    name = strtrim(name or "")
+    if name == "" then return end
+    if name:find(ns.INVALID_NAME_PATTERN) then
+        ns.Print("Ungültiger Name: " .. name)
+        return
+    end
+    local key, inGroup = ns.PlayerKeyForName(name)
+    local importName = not inGroup and name or nil
+    local itemName = UI.GetItemDisplay(itemID)
+    local function add(force)
+        local ok, err = ns.Session:AddLeadReserve(s, key, itemID, importName, force)
+        if ok then
+            ns.Print(string.format("%s für %s eingetragen.", itemName, UI.ShortName(key)))
+        elseif err == "limit" then
+            UI.Confirm(string.format("%s hat bereits %d von %d Reserves.\nTrotzdem eintragen?",
+                UI.ShortName(key), ns.Session:CountReserves(key, s), s.maxReserves), function() add(true) end)
+        else
+            ns.Print("Nicht eingetragen: " .. (err or "?"))
+        end
+    end
+    add(false)
+end
+
 local function showItemMenu(row)
     local s = ns.Session:GetViewed()
     if not s then return end
@@ -325,6 +350,24 @@ local function showItemMenu(row)
             function() ns.Wishlist:Toggle(itemID) end)
         if not isOwner then return end
         root:CreateDivider()
+        if not hr then
+            -- Untermenü: Gruppenmitglieder ohne (bekanntes) Addon, dazu freie Eingabe
+            local forPlayer = root:CreateButton("Für Spieler reservieren…")
+            local count = 0
+            for _, member in ipairs(ns.GroupMembers()) do
+                if not ns.Comm:HasAddon(member) then
+                    forPlayer:CreateButton(UI.ShortName(member), function() reserveForPlayer(s, itemID, member) end)
+                    count = count + 1
+                end
+            end
+            if count > 0 then
+                forPlayer:CreateDivider()
+            end
+            forPlayer:CreateButton("Anderer Name…", function()
+                UI.Prompt("Reserve für welchen Spieler?\n|cff999999Name wie im Spiel, ggf. mit -Realm|r", "",
+                    function(name) reserveForPlayer(s, itemID, name) end)
+            end)
+        end
         root:CreateButton(hr and "Hard Reserve ändern…" or "Hard Reserve setzen…", function()
             UI.Prompt("Hard Reserve für wen?\n|cff999999Name oder Notiz, z. B. „Gildenbank“|r", hr and hr.note or "",
                 function(note)

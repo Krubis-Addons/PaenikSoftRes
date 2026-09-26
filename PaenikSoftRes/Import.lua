@@ -52,27 +52,8 @@ local function splitCSVLine(line)
     return fields
 end
 
--- Name aus softres.it in unseren Schlüssel umwandeln: Gruppenmitglied, sonst vorläufig "Name-Realm".
--- Vorläufige Schlüssel ordnet Session:ResolveImportedPlayers später dem echten Spieler zu
--- (Forever-Nachnamen: aus "krubi" wird dann "Krubi Shooty-Realm").
-local function playerKey(name)
-    local key = ns.ResolvePlayerName(name)
-    if key then
-        return key, true
-    end
-    local base, realm = name:match("^(.-)%-(.+)$")
-    if not base then
-        base, realm = name, GetNormalizedRealmName()
-    else
-        realm = ns.NormalizeRealm(realm)
-    end
-    -- softres.it schreibt Namen oft klein: ersten Buchstaben groß (nur ASCII sicher)
-    local pretty = base:sub(1, 1):upper() .. base:sub(2)
-    return realm and (pretty .. "-" .. realm) or pretty, false
-end
-
--- Diese Zeichen trennen Felder im Sync-Protokoll (Comm.lua) und dürfen nicht in Namen stehen
-local INVALID_NAME = "[%^;=,|]"
+local playerKey = ns.PlayerKeyForName
+local INVALID_NAME = ns.INVALID_NAME_PATTERN
 
 -- Ergebnis eines Imports: result = { reserves = { [key] = { itemID, ... } }, players, count,
 --   notInGroup = { key, ... }, notInInstance, skipped, format }

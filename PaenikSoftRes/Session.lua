@@ -745,6 +745,65 @@ function Session:SetPlayerReserves(player, itemIDs, source, s, signedAt)
     return true
 end
 
+-- Raidlead trägt eine Reserve für einen Spieler ein (z. B. ohne dieses Addon). Quelle "lead".
+-- Gesperrt/Anmeldeschluss gelten nicht (der Raidlead entscheidet); Instanz, gelegte Bosse, Hard
+-- Reserves und doppelte Items werden geprüft. Über dem Limit: false, "limit", außer mit force.
+-- importName (optional): eingegebener Name, solange der Spieler keinem Gruppenmitglied zugeordnet ist.
+function Session:AddLeadReserve(s, player, itemID, importName, force)
+    if not s or s.leader ~= ns.FullName("player") then return false, "Nicht Besitzer der Sitzung" end
+    if not s.instanceKey then return false, "Keine Instanz gewählt" end
+    local itemSet = self:GetInstanceItemSet(s) or {}
+    if not itemSet[itemID] then return false, "Item gehört nicht zur Instanz" end
+    if self:GetKilledOnlyItems(s)[itemID] then return false, "Der Boss für dieses Item ist bereits gelegt" end
+    if s.hardReserves and s.hardReserves[itemID] then return false, "Item ist Hard Reserve" end
+    local ids = self:GetReservedItemIDs(player, s)
+    if not s.allowDuplicates then
+        for _, id in ipairs(ids) do
+            if id == itemID then
+                return false, "Spieler hat das Item bereits reserviert"
+            end
+        end
+    end
+    if #ids >= s.maxReserves and not force then
+        return false, "limit"
+    end
+    local list = s.reserves[player] or {}
+    table.insert(list, { itemID = itemID, source = "lead", importName = importName })
+    s.reserves[player] = list
+    s.changedAt = s.changedAt or {}
+    s.changedAt[player] = GetServerTime()
+    changed("Reserve vom Raidlead eingetragen", player, itemID)
+    Session:Touch(s)
+    if s == ownActive() then
+        ns:Fire("SESSION_RESERVES_CHANGED", player)
+    end
+    return true
+end
+
+-- Raidlead entfernt eine Reserve (ein Vorkommen des Items) eines Spielers aus seiner Sitzung.
+function Session:RemovePlayerReserve(s, player, itemID)
+    if not s or s.leader ~= ns.FullName("player") then return false end
+    local list = s.reserves[player]
+    if not list then return false end
+    for i = #list, 1, -1 do
+        if list[i].itemID == itemID then
+            table.remove(list, i)
+            if #list == 0 then
+                s.reserves[player] = nil
+            end
+            s.changedAt = s.changedAt or {}
+            s.changedAt[player] = GetServerTime()
+            changed("Reserve vom Raidlead entfernt", player, itemID)
+            Session:Touch(s)
+            if s == ownActive() then
+                ns:Fire("SESSION_RESERVES_CHANGED", player)
+            end
+            return true
+        end
+    end
+    return false
+end
+
 -- Import aus einer externen Quelle (z. B. softres.it) in die eigene Sitzung.
 -- reserves = { ["Name-Realm"] = { itemID, ... } }; replaceAll = true verwirft alle bisherigen Reserves,
 -- sonst werden nur die Listen der importierten Spieler ersetzt (Mischbetrieb mit Ingame-Reserves).

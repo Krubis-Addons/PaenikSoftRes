@@ -183,6 +183,43 @@ function ns.ResolvePlayerName(name)
     return key
 end
 
+-- Schlüssel aller Gruppenmitglieder außer dem eigenen, alphabetisch
+function ns.GroupMembers()
+    if not roster then buildRoster() end
+    local me = ns.FullName("player")
+    local list = {}
+    for key in pairs(roster.byKey) do
+        if key ~= me then
+            table.insert(list, key)
+        end
+    end
+    table.sort(list)
+    return list
+end
+
+-- Diese Zeichen trennen Felder im Sync-Protokoll (Comm.lua) und dürfen nicht in Namen stehen
+ns.INVALID_NAME_PATTERN = "[%^;=,|]"
+
+-- Frei eingegebenen Namen (softres.it-Import, Raidlead-Eintrag) in unseren Schlüssel umwandeln:
+-- Gruppenmitglied, sonst vorläufig "Name-Realm" (zweiter Rückgabewert false). Vorläufige Schlüssel
+-- ordnet Session:ResolveImportedPlayers später dem echten Spieler zu
+-- (Forever-Nachnamen: aus "krubi" wird dann "Krubi Shooty-Realm").
+function ns.PlayerKeyForName(name)
+    local key = ns.ResolvePlayerName(name)
+    if key then
+        return key, true
+    end
+    local base, realm = name:match("^(.-)%-(.+)$")
+    if not base then
+        base, realm = name, GetNormalizedRealmName()
+    else
+        realm = ns.NormalizeRealm(realm)
+    end
+    -- softres.it schreibt Namen oft klein: ersten Buchstaben groß (nur ASCII sicher)
+    local pretty = base:sub(1, 1):upper() .. base:sub(2)
+    return realm and (pretty .. "-" .. realm) or pretty, false
+end
+
 -- Chat-Kanal der aktuellen Gruppe (nil ohne Gruppe)
 function ns.GroupChannel()
     if IsInRaid and IsInRaid() then

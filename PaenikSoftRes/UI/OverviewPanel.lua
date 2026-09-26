@@ -20,11 +20,37 @@ local function onRowEnter(row)
     if not row.itemID then return end
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
     GameTooltip:SetItemByID(row.itemID)
+    local s = ns.Session:GetViewed()
+    if row.names and s and s.leader == ns.FullName("player") then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Rechtsklick: Reserve eines Spielers entfernen", 0.6, 0.8, 1)
+    end
     GameTooltip:Show()
 end
 
 local function onRowLeave()
     GameTooltip:Hide()
+end
+
+-- Raidlead (eigene Sitzung): Rechtsklick auf ein Item → Reserve eines Spielers entfernen
+local function onRowClick(row, mouseButton)
+    if mouseButton ~= "RightButton" or not row.itemID or not row.names then return end
+    local s = ns.Session:GetViewed()
+    if not s or s.leader ~= ns.FullName("player") then return end
+    local itemID = row.itemID
+    local players = {}
+    for player in pairs(row.names) do
+        table.insert(players, player)
+    end
+    table.sort(players)
+    MenuUtil.CreateContextMenu(row, function(_, root)
+        root:CreateTitle(UI.StripColors(select(1, UI.GetItemDisplay(itemID)) or ""))
+        for _, player in ipairs(players) do
+            root:CreateButton("Reserve von " .. UI.ShortName(player) .. " entfernen", function()
+                ns.Session:RemovePlayerReserve(s, player, itemID)
+            end)
+        end
+    end)
 end
 
 local function initRow(row, data)
@@ -48,8 +74,11 @@ local function initRow(row, data)
         row.players:SetWordWrap(false)
         row:SetScript("OnEnter", onRowEnter)
         row:SetScript("OnLeave", onRowLeave)
+        row:RegisterForClicks("RightButtonUp")
+        row:SetScript("OnClick", onRowClick)
     end
     row.itemID = data.itemID
+    row.names = data.names -- nur bei Reserve-Zeilen (nicht Verlauf/Hard Reserve)
     local name, icon = UI.GetItemDisplay(data.itemID, onItemLoaded)
     row.icon:SetTexture(icon)
     row.name:SetText(name)
@@ -78,17 +107,18 @@ local function itemOrder(s)
 end
 
 local IMPORT_COLOR = "ff80c8ff" -- Reserves aus softres.it
+local LEAD_COLOR = "ffffb060" -- vom Raidlead eingetragen (Spieler ohne Addon)
 
 local function buildElements(s)
     local byItem = {}
-    local playerCount, reserveCount, importedCount = 0, 0, 0
+    local playerCount, reserveCount, importedCount, leadCount = 0, 0, 0, 0
     for player, list in pairs(s.reserves) do
         playerCount = playerCount + 1
         for _, entry in ipairs(list) do
             reserveCount = reserveCount + 1
             local item = byItem[entry.itemID]
             if not item then
-                item = { itemID = entry.itemID, total = 0, names = {}, imported = {} }
+                item = { itemID = entry.itemID, total = 0, names = {}, imported = {}, byLead = {} }
                 byItem[entry.itemID] = item
             end
             item.total = item.total + 1
@@ -96,6 +126,9 @@ local function buildElements(s)
             if entry.source == "softres" then
                 item.imported[player] = true
                 importedCount = importedCount + 1
+            elseif entry.source == "lead" then
+                item.byLead[player] = true
+                leadCount = leadCount + 1
             end
         end
     end
@@ -106,7 +139,8 @@ local function buildElements(s)
         for player, count in pairs(item.names) do
             local short = UI.ShortName(player)
             local text = count > 1 and (short .. " x" .. count) or short
-            table.insert(names, { sort = short, text = item.imported[player] and ("|c" .. IMPORT_COLOR .. text .. "|r") or text })
+            local color = item.imported[player] and IMPORT_COLOR or (item.byLead[player] and LEAD_COLOR)
+            table.insert(names, { sort = short, text = color and ("|c" .. color .. text .. "|r") or text })
         end
         table.sort(names, function(a, b) return a.sort < b.sort end)
         for i, entry in ipairs(names) do
@@ -134,7 +168,7 @@ local function buildElements(s)
         if oa ~= ob then return oa < ob end
         return a.itemID < b.itemID
     end)
-    return elements, playerCount, reserveCount, importedCount
+    return elements, playerCount, reserveCount, importedCount, leadCount
 end
 
 -- Verlauf: vergebene Items, neueste zuerst
@@ -180,9 +214,15 @@ function refreshList()
         scrollBox:SetDataProvider(CreateDataProvider(elements), ScrollBoxConstants.RetainScrollPosition)
         return
     end
-    local elements, playerCount, reserveCount, importedCount = buildElements(s)
-    local importText = importedCount > 0
-        and string.format(" (|c%s%d aus softres.it|r)", IMPORT_COLOR, importedCount) or ""
+    local elements, playerCount, reserveCount, importedCount, leadCount = buildElements(s)
+    local extra = {}
+    if importedCount > 0 then
+        table.insert(extra, string.format("|c%s%d aus softres.it|r", IMPORT_COLOR, importedCount))
+    end
+    if leadCount > 0 then
+        table.insert(extra, string.format("|c%s%d vom Raidlead|r", LEAD_COLOR, leadCount))
+    end
+    local importText = #extra > 0 and (" (" .. table.concat(extra, ", ") .. ")") or ""
     header:SetText(string.format("%s – %d Spieler, %d Reserves%s%s",
         UI.SessionTitle(s), playerCount, reserveCount, importText,
         (ns.Session:IsLocked(s) or s.deadline) and (" – " .. UI.LockStateText(s)) or ""))

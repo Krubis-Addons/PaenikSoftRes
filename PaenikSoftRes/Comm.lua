@@ -465,6 +465,14 @@ function handlers.X(sender, f)
     ns:Fire("SESSION_CHANGED")
 end
 
+-- Spieler, von denen in dieser Spielsitzung eine Addon-Nachricht kam (Raider senden beim
+-- Gruppenbeitritt eine Stand-Anfrage Q). Nur ein Anhaltspunkt: wer noch nichts gesendet hat, fehlt.
+local addonUsers = {}
+
+function Comm:HasAddon(player)
+    return player == ns.FullName("player") or addonUsers[player] == true
+end
+
 function ns:CHAT_MSG_ADDON(prefix, text, _, sender)
     -- In Midnight können Chat-Werte Secrets sein: dann nicht anfassen.
     if issecretvalue and (issecretvalue(prefix) or issecretvalue(text) or issecretvalue(sender)) then
@@ -473,6 +481,7 @@ function ns:CHAT_MSG_ADDON(prefix, text, _, sender)
     if prefix ~= PREFIX then return end
     sender = normalizeSender(sender)
     if sender == ns.FullName("player") then return end
+    addonUsers[sender] = true
     local f = splitFields(text)
     if f[1] ~= VERSION then
         ns.Debug("Comm", "Unbekannte Version von", sender, f[1])
