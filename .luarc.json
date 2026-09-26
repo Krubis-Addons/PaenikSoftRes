@@ -1,5 +1,12 @@
 {
   "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
   "runtime.version": "Lua 5.1",
-  "diagnostics.globals": ["PaenikSoftResDB", "PaenikSoftResDebugLog"]
+  "diagnostics.globals": [
+    "PaenikSoftResDB",
+    "PaenikSoftResDebugLog",
+    "PanelTemplates_SetNumTabs",
+    "PanelTemplates_SetTab",
+    "PanelTemplates_SetTabEnabled",
+    "SOUNDKIT"
+  ]
 }

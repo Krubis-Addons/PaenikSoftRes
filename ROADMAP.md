@@ -1,0 +1,13 @@
+# PaenikSoftRes – Roadmap
+
+| # | Iteration | Inhalt |
+|---|---|---|
+| 2 | Datenmodell, Rollen, UI-Gerüst, API-Probe | Sitzung + Reserve-API, Rollenerkennung, Fenster mit Tabs, `/paeniksoftres probe` |
+| 3 | Raidlead: Regeln | Instanzauswahl über Provider-Schicht (`Data/LootData.lua`): EJ-Provider (in der Beta leer, `EncounterJournalDisabled=1`) + eigene Tabellen (Start: Molten Core). Max. SRs (1–5), doppelte Items, Sitzung sperren/öffnen. Schwierigkeitsgrade entfallen vorerst. |
+| 4 | Raider: Auswahl + Sync | Loot-Liste pro Boss aus `ns.LootData` (Icon, Name, Tooltip), Checkboxen bis zum Limit. Protokoll `PSR` über `C_ChatInfo`: `RULES` (Lead → Raid), `RES` (Raider → Lead), `LIST` (Lead → Raid, Übersicht), `REQ` (Status nach einem Reload anfragen). Nachrichten mit Version, Aufteilung in Stücke bei > 255 Byte; der Lead nimmt nur gültige Items an und prüft das Limit. |
+| 5 | Loot-Anzeige | Bei `LOOT_OPENED`/`LOOT_READY` ein Panel neben dem Lootfenster mit den Items und ihren SR-Inhabern; dazu ein GameTooltip-Hook (`TooltipDataProcessor`/`hooksecurefunc`), der „SR: Name1, Name2“ anzeigt. |
+| 6 | Roll-Runden | Der Lead startet eine Runde für ein Item (aus dem Loot-Panel oder per Link) → `ROLL_START` an den Raid. Raider bekommen ein Popup mit den Buttons SR/MS/OS/Transmog/Passen → `RandomRoll(1,100)`, das Ergebnis wird aus `CHAT_MSG_SYSTEM` gelesen (lokalisiertes Muster aus `RANDOM_ROLL_RESULT`). Priorität SR > MS > OS > TM; der Lead beendet die Runde → Gewinner wird angezeigt (optional im Raidchat), Historie wird gespeichert. |
+| 7 | softres.it-Import | Import-Dialog (mehrzeilige EditBox, Kopieren & Einfügen) für den CSV- bzw. Gargul-Export von softres.it → Übernahme in `db.session.reserves`, Mischbetrieb mit Ingame-Reserves (Quelle markieren). HTTP ist nicht möglich, also nur Einfügen. Das Format wird zu Beginn der Iteration recherchiert. |
+| 8 | Feinschliff | Minimap-/Addon-Compartment-Button, Optionen, Review mit `wow-reviewer`, `.toc`-Metadaten. |
+
+Status: Iterationen 1–3 umgesetzt. Offen aus Iteration 3: Bestätigungsdialog vor „Neu starten“/Instanzwechsel, wenn schon Reserves existieren; weitere Instanz-Tabellen, sobald klar ist, welche Inhalte Forever hat.

@@ -1,9 +1,17 @@
 ## Interface: 16001
 ## Title: PaenikSoftRes
-## Notes: Beschreibung deines Addons
-## Author: Dein Name
+## Notes: Soft-Reserve-Verwaltung für Raids: Regeln, Reserves, Loot-Anzeige und Roll-Runden.
+## Author: Krubis Addons
 ## Version: @project-version@
 ## SavedVariables: PaenikSoftResDB, PaenikSoftResDebugLog
 
 Debug.lua
 Core.lua
+Session.lua
+Roles.lua
+Data\LootData.lua
+Data\EJProvider.lua
+Data\Instances\MoltenCore.lua
+UI\MainFrame.lua
+UI\LeadPanel.lua
+Probe.lua
