@@ -31,6 +31,8 @@ end)
 
 local rows = {}
 local lootItems = {} -- { { slot, itemID, link }, ... }
+local testMode = false -- Panel zeigt Test-Items (/paeniksoftres loottest) statt einer Leiche
+local buildTestItems
 
 -- Zeilen -------------------------------------------------------------------------
 
@@ -170,6 +172,7 @@ local function update()
         panel:Hide()
         return
     end
+    testMode = false
     readLoot()
     if #lootItems == 0 then
         panel:Hide()
@@ -198,9 +201,13 @@ end
 
 -- entprellt: ein voller Stand vom Raidlead löst viele SESSION_CHANGED aus
 local refreshIfShown = UI.Debounce(function()
-    if panel:IsShown() then
-        refresh()
+    if not panel:IsShown() then return end
+    -- Test-Items gehören zur Sitzung: nach Wechsel/Neuanlage/Änderung neu aufbauen
+    if testMode and not buildTestItems() then
+        panel:Hide()
+        return
     end
+    refresh()
 end)
 ns:On("SESSION_CHANGED", refreshIfShown)
 ns:On("ROLL_CHANGED", refreshIfShown)
@@ -224,14 +231,11 @@ ns:RegisterEvent("LOOT_OPENED")
 ns:RegisterEvent("LOOT_SLOT_CLEARED")
 ns:RegisterEvent("LOOT_CLOSED")
 
--- Test ohne Leiche: /paeniksoftres loottest zeigt das Panel mit den eigenen Reserves
-function ns.ShowLootTest()
-    local s = ns.Session:Get()
-    if not s then
-        ns.Print("Keine Sitzung.")
-        return
-    end
+-- Test-Items aus den Reserves der aktuellen Sitzung; false = keine vorhanden
+function buildTestItems()
     wipe(lootItems)
+    local s = ns.Session:Get()
+    if not s then return false end
     local seen = {}
     for _, list in pairs(s.reserves) do
         for _, entry in ipairs(list) do
@@ -246,10 +250,23 @@ function ns.ShowLootTest()
             end
         end
     end
-    if #lootItems == 0 then
+    return #lootItems > 0
+end
+
+-- Test ohne Leiche: /paeniksoftres loottest zeigt das Panel mit den Reserves der aktuellen Sitzung
+-- und folgt danach Sitzungswechseln und Änderungen
+function ns.ShowLootTest()
+    if not ns.Session:Get() then
+        panel:Hide()
+        ns.Print("Keine Sitzung.")
+        return
+    end
+    if not buildTestItems() then
+        panel:Hide()
         ns.Print("Keine Reserves für den Test vorhanden.")
         return
     end
+    testMode = true
     refresh()
     anchorPanel()
     panel:Show()
