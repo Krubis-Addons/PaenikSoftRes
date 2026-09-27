@@ -240,7 +240,9 @@ local function sendFullState()
     sendRules()
     send(channel, nil, "F", s.id)
     sendHardReserves()
-    sendLootList(false)
+    if ns.Roles:IsDistributor() then
+        sendLootList(false) -- bei separatem Plündermeister sendet er die Liste selbst
+    end
     local players = {}
     for player in pairs(s.reserves) do
         table.insert(players, player)
@@ -264,9 +266,6 @@ local function flushPending()
             if pendingHR then
                 sendHardReserves()
             end
-            if pendingLoot then
-                sendLootList(pendingLootOpen)
-            end
             local players = {}
             for player in pairs(pendingPlayers) do
                 table.insert(players, player)
@@ -275,6 +274,10 @@ local function flushPending()
                 sendPlayers(players)
             end
         end
+    end
+    -- Beute-Liste sendet der Verteiler (Raidlead bzw. Plündermeister), auch ohne eigene Sitzung
+    if pendingLoot and not pendingFull and ns.Roles:IsDistributor() and groupChannel() then
+        sendLootList(pendingLootOpen)
     end
     pendingRules, pendingFull, pendingHR = false, false, false
     pendingLoot, pendingLootOpen = false, false
@@ -477,7 +480,9 @@ end
 
 -- Verteilliste vom Raidlead: L^sid^leeren^öffnen^Leiche^itemID=lootKey;...
 function handlers.L(sender, f)
-    if not isFromSessionLeader(sender, f[3]) then return end
+    -- vom Verteiler (Gruppenleiter bzw. Plündermeister); auch der Raidlead übernimmt sie in seine Sitzung
+    local s = ns.Session:Get()
+    if not s or s.id ~= f[3] or not ns.Roles:IsDistributorName(sender) then return end
     local fresh = ns.Session:ApplyRemoteLootList(f[3], f[7], f[4] == "1", f[6])
     if f[5] == "1" and fresh > 0 then
         ns:Fire("LOOT_LIST_OPEN")
@@ -511,6 +516,11 @@ end
 function handlers.Q()
     if ns.Session:IsMaster() then
         pendingFull = true
+        scheduleFlush(2)
+    end
+    -- separater Plündermeister: seine Beute-Liste nachreichen
+    if ns.Roles:IsDistributor() and not ns.Session:IsMaster() and ns.Session:Get() then
+        pendingLoot = true
         scheduleFlush(2)
     end
 end

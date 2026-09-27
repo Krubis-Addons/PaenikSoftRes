@@ -196,8 +196,9 @@ end
 -- freeReason (optional): offene Runde erzwingen, Grund steht in der Ansage
 -- lootKey (optional): Leiche + Item ("GUID:itemID"), damit das Loot-Panel den Gewinner zuordnen kann
 function Rolls:Start(itemID, link, restrictTo, category, freeReason, lootKey)
-    if not ns.Roles:IsLead() then
-        ns.Print("Nur der Raidlead kann eine Würfelrunde starten.")
+    if not ns.Roles:IsDistributor() then
+        ns.Print("Nur der Verteiler kann eine Würfelrunde starten (Raidlead bzw. bei Plündermeister-Verteilung der "
+            .. "Plündermeister).")
         return
     end
     if leadRound and not leadRound.ended then
@@ -462,10 +463,10 @@ function Rolls:Dismiss()
     changed()
 end
 
--- Rolle verloren (Gruppenleitung abgegeben): eigene Runde still verwerfen
-ns:On("ROLE_CHANGED", function()
-    if leadRound and not ns.Roles:IsLead() then
-        ns.Print("Du bist nicht mehr Raidlead – die Würfelrunde wurde verworfen.")
+-- Verteiler-Rolle verloren (Gruppenleitung abgegeben, anderer Plündermeister): eigene Runde verwerfen
+ns:On("DISTRIBUTOR_CHANGED", function()
+    if leadRound and not ns.Roles:IsDistributor() then
+        ns.Print("Du verteilst den Loot nicht mehr – die Würfelrunde wurde verworfen.")
         stopTimer()
         ns.GargulCompat:SendStop()
         if activeRound and activeRound.id == leadRound.id then
@@ -585,7 +586,8 @@ ns:RegisterEvent("CHAT_MSG_SYSTEM")
 -- Nachrichten ------------------------------------------------------------------------------
 
 ns.Comm:RegisterHandler("RS", function(sender, f)
-    if not ns.Comm.IsGroupLeader(sender) then return end
+    -- nur vom Verteiler (Gruppenleiter bzw. Plündermeister)
+    if not ns.Roles:IsDistributorName(sender) then return end
     local holders = {}
     for player in (f[6] or ""):gmatch("[^;]+") do
         holders[player] = true

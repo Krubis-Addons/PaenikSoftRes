@@ -30,9 +30,16 @@ local function qualityShown(entry)
     return quality == nil or quality >= minQuality()
 end
 
--- Darf dieser Spieler die Liste bearbeiten und würfeln lassen? (Raidlead mit eigener Sitzung)
+-- Darf dieser Spieler die Liste bearbeiten und verrollen? Der Verteiler (Raidlead bzw. bei Plündermeister-
+-- Verteilung der Plündermeister, wie im Spiel), sofern er die Sitzung hat (eigene oder Gruppen-Spiegel).
 local function canEdit()
-    return ns.Session:IsOwner() and ns.Roles:IsLead()
+    return ns.Session:Get() ~= nil and ns.Roles:IsDistributor()
+end
+
+-- „ – X verteilt“ für Raider (bei Plündermeister-Verteilung der Plündermeister)
+local function distributorText()
+    local distributor = ns.Roles:GetDistributor()
+    return distributor and (" – " .. UI.ShortName(distributor) .. " verteilt") or " – der Raidlead verteilt"
 end
 
 local function notifyChanged(open)
@@ -56,7 +63,7 @@ local function addFromCursor()
     if infoType ~= "item" or not itemID then return end
     ClearCursor()
     if not canEdit() then
-        ns.Print("Nur der Raidlead kann Items zur Beute hinzufügen.")
+        ns.Print("Nur der Verteiler (Raidlead bzw. Plündermeister) kann Items zur Beute hinzufügen.")
         return
     end
     bagCounter = bagCounter + 1
@@ -356,6 +363,7 @@ local function createWindow(config)
         end
     end)
     for _, event in ipairs({ "SESSION_CHANGED", "ROLL_CHANGED", "ROSTER_CHANGED", "ROLE_CHANGED", "LOOT_QUALITY_CHANGED",
+        "DISTRIBUTOR_CHANGED",
         "WISHLIST_CHANGED" }) do
         ns:On(event, refreshIfShown)
     end
@@ -378,7 +386,7 @@ local softResWindow = createWindow({
     end,
     info = function(_, entries, editable)
         return #entries .. " Items der letzten Leiche"
-            .. (editable and " – verrollen oder für später looten (Beute)" or " – der Raidlead verteilt")
+            .. (editable and " – verrollen oder für später looten (Beute)" or distributorText())
     end,
     empty = function() return "Noch keine Leiche gelootet." end,
     anchor = function(frame)

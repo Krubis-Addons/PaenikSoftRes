@@ -328,7 +328,7 @@ end)
 local GLOBAL_BOX_WIDTH = 250
 
 local globalBox = CreateFrame("Frame", nil, panel)
-globalBox:SetSize(GLOBAL_BOX_WIDTH, 260)
+globalBox:SetSize(GLOBAL_BOX_WIDTH, 296)
 globalBox:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, -74)
 local globalBg = globalBox:CreateTexture(nil, "BACKGROUND")
 globalBg:SetAllPoints()
@@ -416,6 +416,23 @@ qualityLabel:SetText("Loot ab:")
 local qualityDropdown = UI.CreateLootQualityDropdown(globalBox, 150)
 qualityDropdown:SetPoint("LEFT", qualityLabel, "RIGHT", 8, 0)
 
+-- Wer verteilt gerade? Bei Plündermeister-Verteilung der Plündermeister (wie im Spiel)
+local distributorHint = globalBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+distributorHint:SetPoint("TOPLEFT", qualityLabel, "BOTTOMLEFT", 0, -14)
+distributorHint:SetWidth(GLOBAL_BOX_WIDTH - 20)
+distributorHint:SetJustifyH("LEFT")
+
+local function updateDistributorHint()
+    if ns.Roles:HasSeparateMasterLooter() then
+        distributorHint:SetText("|cffffd100Plündermeister " .. UI.ShortName(ns.Roles:GetDistributor() or "?")
+            .. " verteilt den Loot (verrollen, zuteilen).|r")
+    else
+        distributorHint:SetText("|cff999999Loot verteilst du als Gruppenleiter.|r")
+    end
+end
+ns:On("DISTRIBUTOR_CHANGED", updateDistributorHint)
+ns:On("ROSTER_CHANGED", updateDistributorHint)
+
 -- Sitzungs- und Statustext enden links vom Kasten (sonst läuft ein langer Text darunter)
 for _, text in ipairs({ sessionText, lockText }) do
     text:SetPoint("RIGHT", globalBox, "LEFT", -12, 0)
@@ -426,6 +443,7 @@ end
 globalBox:SetScript("OnShow", function()
     manualWinnerCheck:SetChecked(ns.db and ns.db.manualWinner == true)
     autoTradeCheck:SetChecked(ns.db and ns.db.autoTrade ~= false)
+    updateDistributorHint()
     durationDropdown:SignalUpdate()
 end)
 

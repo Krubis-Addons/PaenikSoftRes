@@ -29,7 +29,13 @@ local function pendingWins(player)
     local list = {}
     if not player then return list end
     local since = GetServerTime() - HISTORY_DAYS * 86400
-    for _, s in ipairs(ns.Session:List()) do
+    -- eigene Sitzungen und der Gruppen-Spiegel (separater Plündermeister hat die Items, nicht die Sitzung)
+    local sessions = ns.Session:List()
+    local remote = ns.Session:GetRemote()
+    if remote then
+        table.insert(sessions, remote)
+    end
+    for _, s in ipairs(sessions) do
         for _, entry in ipairs(s.history or {}) do
             if entry.winner == player and not entry.traded and (entry.time or 0) >= since then
                 table.insert(list, entry)
