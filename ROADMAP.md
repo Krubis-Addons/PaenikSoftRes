@@ -17,6 +17,7 @@ Offen / später:
 - Weitere Instanz-Tabellen, sobald klar ist, welche Raids Forever zum Launch hat.
 - Tests in einer echten Gruppe: Sync zwischen zwei Spielern, fremde Namen, Gleichstand/Nachwurf, Loot-Panel an einer echten Leiche.
 - Feldtest 2026-09-27: Einige Raider sahen beim Verteilen kein Fenster – vermutlich nur das „Soft Reserves“-Fenster am Lootfenster (erscheint nur bei dem, der die Leiche öffnet). Beim nächsten Raid prüfen, ob das Würfelfenster bei allen aufgeht (Debug-Log eines betroffenen Raiders).
+- Gewinne beim Handeln einlegen (`Trade.lua`, noch ungetestet): automatisches Einlegen beim Öffnen des Handels (blockiert Forever `UseContainerItem` ohne Tastendruck? sonst Knopf „Gewinne einlegen“), Markierung „übergeben“ nach dem Handel, `/psr probe` für `GetTradePlayerItemLink`.
 - Tests in einer Gruppe mit Gargul-Nutzern: Gargul-Würfelfenster öffnet/schließt sich, Würfe kommen an.
 
 Ideen (später umsetzen):

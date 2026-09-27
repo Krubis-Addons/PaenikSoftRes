@@ -328,7 +328,7 @@ end)
 local GLOBAL_BOX_WIDTH = 250
 
 local globalBox = CreateFrame("Frame", nil, panel)
-globalBox:SetSize(GLOBAL_BOX_WIDTH, 196)
+globalBox:SetSize(GLOBAL_BOX_WIDTH, 226)
 globalBox:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, -74)
 local globalBg = globalBox:CreateTexture(nil, "BACKGROUND")
 globalBg:SetAllPoints()
@@ -341,7 +341,7 @@ globalBorder:SetColorTexture(1, 0.82, 0, 0.6)
 
 local globalTitle = globalBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 globalTitle:SetPoint("TOPLEFT", globalBox, "TOPLEFT", 10, -10)
-globalTitle:SetText("Würfeln")
+globalTitle:SetText("Würfeln & Verteilen")
 local globalSubtitle = globalBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 globalSubtitle:SetPoint("TOPLEFT", globalTitle, "BOTTOMLEFT", 0, -3)
 globalSubtitle:SetText("|cff999999Gilt für alle Sitzungen (deine Einstellung)|r")
@@ -391,6 +391,24 @@ manualWinnerCheck:SetScript("OnEnter", function(self)
 end)
 manualWinnerCheck:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+-- Gewonnene Items beim Handeln automatisch einlegen (Trade.lua)
+local autoTradeCheck = CreateFrame("CheckButton", nil, globalBox, "UICheckButtonTemplate")
+autoTradeCheck:SetPoint("TOPLEFT", manualWinnerCheck, "BOTTOMLEFT", 0, 2)
+autoTradeCheck.Text:SetText("Gewinne beim Handeln einlegen")
+autoTradeCheck.Text:SetFontObject("GameFontHighlight")
+autoTradeCheck:SetScript("OnClick", function(self)
+    ns.db.autoTrade = self:GetChecked() and true or false
+end)
+autoTradeCheck:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Gewinne beim Handeln einlegen")
+    GameTooltip:AddLine("Öffnest du einen Handel mit einem Spieler, legt das Addon seine gewonnenen, noch nicht "
+        .. "übergebenen Items automatisch in das Handelsfenster. Nach dem Handel gelten sie als übergeben.",
+        1, 1, 1, true)
+    GameTooltip:Show()
+end)
+autoTradeCheck:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
 -- Sitzungs- und Statustext enden links vom Kasten (sonst läuft ein langer Text darunter)
 for _, text in ipairs({ sessionText, lockText }) do
     text:SetPoint("RIGHT", globalBox, "LEFT", -12, 0)
@@ -400,6 +418,7 @@ end
 -- Stand bei jedem Anzeigen übernehmen (auch in den Optionen änderbar)
 globalBox:SetScript("OnShow", function()
     manualWinnerCheck:SetChecked(ns.db and ns.db.manualWinner == true)
+    autoTradeCheck:SetChecked(ns.db and ns.db.autoTrade ~= false)
     durationDropdown:SignalUpdate()
 end)
 

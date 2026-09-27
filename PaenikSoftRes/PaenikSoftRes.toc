@@ -26,6 +26,7 @@ Owned.lua
 Wishlist.lua
 Templates.lua
 LootFilter.lua
+Trade.lua
 Import.lua
 GuildSync.lua
 UI\MainFrame.lua

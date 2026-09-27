@@ -101,8 +101,9 @@ local function refresh()
             row.bg:SetColorTexture(1, 0.82, 0, 0.12)
             row.roll:SetText("Würfeln")
         elseif award then
-            row.holders:SetText(string.format("|cff40ff40Gewonnen:|r %s (%s, %d)", UI.ShortName(award.winner or "?"),
-                ns.Rolls.LABEL[award.category] or award.category or "?", award.roll or 0))
+            row.holders:SetText(string.format("|cff40ff40Gewonnen:|r %s (%s, %d)%s", UI.ShortName(award.winner or "?"),
+                ns.Rolls.LABEL[award.category] or award.category or "?", award.roll or 0,
+                award.traded and "  |cff60ff60übergeben|r" or ""))
             row.bg:SetColorTexture(0.1, 0.6, 0.1, 0.2)
             row.roll:SetText("Erneut")
         elseif ns.Session:GetHardReserve(item.itemID) then

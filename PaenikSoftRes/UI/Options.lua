@@ -104,11 +104,17 @@ local manualWinnerCheck = createCheckbox(gargulCheck, -4, "Gewinner manuell wäh
     function() return ns.db.manualWinner == true end,
     function(value) ns.db.manualWinner = value end)
 
+local autoTradeCheck = createCheckbox(manualWinnerCheck, -4, "Gewonnene Items beim Handeln einlegen (als Raidlead)",
+    "Öffnest du einen Handel mit einem Spieler, legt das Addon seine gewonnenen, noch nicht übergebenen Items "
+        .. "automatisch in das Handelsfenster. Auch im Raidlead-Tab einstellbar.",
+    function() return ns.db.autoTrade ~= false end,
+    function(value) ns.db.autoTrade = value end)
+
 -- Vergangene Sitzungen aus regelmäßigen Raids aufräumen (Templates.lua)
 local PAST_DAYS = { 0, 3, 7, 14, 30 }
 
 local pastLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-pastLabel:SetPoint("TOPLEFT", manualWinnerCheck, "BOTTOMLEFT", 4, -18)
+pastLabel:SetPoint("TOPLEFT", autoTradeCheck, "BOTTOMLEFT", 4, -18)
 pastLabel:SetText("Vergangene Sitzungen löschen:")
 
 local pastDropdown = CreateFrame("DropdownButton", nil, panel, "WowStyle1DropdownTemplate")

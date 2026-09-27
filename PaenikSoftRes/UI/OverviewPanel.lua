@@ -182,8 +182,9 @@ local function buildHistoryElements(s)
             itemID = entry.itemID,
             total = 0,
             countText = date("%H:%M", entry.time),
-            players = string.format("|cffffd100%s|r – %s, %d", UI.ShortName(entry.winner or "?"),
-                ns.Rolls.LABEL[entry.category] or entry.category or "?", entry.roll or 0),
+            players = string.format("|cffffd100%s|r – %s, %d%s", UI.ShortName(entry.winner or "?"),
+                ns.Rolls.LABEL[entry.category] or entry.category or "?", entry.roll or 0,
+                entry.traded and "  |cff60ff60übergeben|r" or ""),
         })
     end
     return elements

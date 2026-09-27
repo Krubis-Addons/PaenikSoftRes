@@ -22,6 +22,7 @@ local GLOBALS = {
     "GetRaidRosterInfo",
     "IsInGroup",
     "IsInRaid",
+    "GetTradePlayerItemLink",
 }
 
 local function probeEJ()

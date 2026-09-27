@@ -11,6 +11,7 @@ local defaults = {
     debug = false, -- Debug-Log und Testbefehle (Optionen oder /paeniksoftres debug)
     guildSync = true, -- Gilden-Synchronisation (GuildSync.lua)
     gargulCompat = true, -- Würfelrunden auch an Gargul senden (GargulCompat.lua)
+    autoTrade = true, -- gewonnene Items beim Handeln automatisch einlegen (Trade.lua)
     pastSessionDays = 14, -- vergangene Vorlagen-Sitzungen nach so vielen Tagen löschen (0 = nie, Templates.lua)
     -- forceRole: nil = automatisch, "lead" oder "raider" (zum Testen)
     -- sessions, activeSessionId, remoteSession: Soft-Reserve-Sitzungen, siehe Session.lua
