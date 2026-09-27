@@ -7,7 +7,7 @@ local DB_VERSION = 2 -- 2: mehrere Sitzungen (db.sessions statt db.session)
 
 local defaults = {
     version = DB_VERSION,
-    showOnLogin = true,
+    showOnLogin = false, -- Hauptfenster beim Login öffnen (Standard aus)
     debug = false, -- Debug-Log und Testbefehle (Optionen oder /paeniksoftres debug)
     guildSync = true, -- Gilden-Synchronisation (GuildSync.lua)
     gargulCompat = true, -- Würfelrunden auch an Gargul senden (GargulCompat.lua)

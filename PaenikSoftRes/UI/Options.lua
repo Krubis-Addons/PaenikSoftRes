@@ -46,9 +46,10 @@ local minimap = createCheckbox(showOnLogin, -4, "Minimap-Button anzeigen", nil,
     function() return not ns.db.minimap.hide end,
     function(value) ns.SetMinimapButtonShown(value) end)
 
-local lootPanel = createCheckbox(minimap, -4, "„Soft Reserves“-Fenster beim Looten öffnen",
-    "Öffnet das Fenster mit Drops, Soft Reserves und Gewinnern, sobald du lootest – als Raider, sobald der "
-        .. "Raidlead lootet. Das Fenster zeigt die Items der letzten Leiche und bleibt offen, bis du es schließt (/psr loot öffnet es jederzeit, /psr beute alle gelooteten Items).",
+local lootPanel = createCheckbox(minimap, -4, "„Soft Reserves“-Fenster automatisch öffnen, wenn gelootet wird",
+    "Öffnet das Fenster mit Drops, Soft Reserves und Gewinnern, sobald der Verteiler eine Leiche lootet "
+        .. "(Plündermeister bzw. Raidlead – oder du selbst, wenn du verteilst). Ausgeschaltet öffnest du es nur "
+        .. "von Hand: /psr loot (letzte Leiche), /psr beute (alle gelooteten Items).",
     function() return ns.db.lootPanel end,
     function(value) ns.db.lootPanel = value end)
 
