@@ -371,28 +371,6 @@ function Session:KilledFromString(text)
     return killed
 end
 
--- Neue Sitzung, die dieselbe Raid-ID fortführt: gleiche Instanz und Regeln, gelegte Bosse bleiben
--- markiert; keine Reserves, kein Verlauf, kein Anmeldeschluss. Wird aktiv.
-function Session:Continue()
-    local old = ownActive()
-    if not old then return false end
-    local s = newSession(old.leader)
-    s.instanceKey = old.instanceKey
-    s.instanceName = old.instanceName
-    s.maxReserves = old.maxReserves or 1
-    s.allowDuplicates = old.allowDuplicates
-    s.killed = old.killed and CopyTable(old.killed) or nil
-    s.parentId = old.id
-    s.name = (old.name or autoName(old)) .. " (Fortsetzung)"
-    s.nameAuto = false
-    ownSessions()[s.id] = s
-    ns.char.activeSessionId = s.id
-    changed("Sitzung fortgeführt", old.id, "->", s.id)
-    Session:Touch(s)
-    ns:Fire("SESSION_RULES_CHANGED")
-    return true
-end
-
 -- Regeln auf eine eigene Sitzung anwenden; nur die aktive wird an die Gruppe verteilt
 local function applyRules(s, rules)
     -- Reserves gehören zu einer Instanz: bei einem Wechsel verfallen sie.

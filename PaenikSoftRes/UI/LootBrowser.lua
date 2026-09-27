@@ -96,7 +96,7 @@ content:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
 
 -- Loot-Filter (LootFilter.lua) rechts, Überschrift links daneben
 local filterDropdown = ns.LootFilter:CreateDropdown(content)
-filterDropdown:SetPoint("TOPRIGHT", content, "TOPRIGHT", -20, 6)
+filterDropdown:SetPoint("TOPRIGHT", content, "TOPRIGHT", -20, 11) -- etwas höher: nicht über dem ersten Item
 
 local lootHeader = UI.CreateText(content, nil, nil, "GameFontNormal")
 lootHeader:SetPoint("RIGHT", filterDropdown, "LEFT", -8, 0)

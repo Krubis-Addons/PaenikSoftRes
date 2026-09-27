@@ -4,7 +4,7 @@
 --    oder lootet die Items für später. Bleibt offen, bis es geschlossen wird. /psr loot, Shift-Klick Minimap.
 --  • „Beute“: alle gelooteten Items der Sitzung; verrollte sind markiert (oder ausgeblendet). Von hier startet der
 --    Raidlead Würfelrunden für Items im Inventar; Items aus den Taschen lassen sich hineinziehen. /psr beute,
---    Knopf im Raidlead-Tab und in der Übersicht.
+--    Knopf in der Übersicht.
 -- Die Liste geht über die Nachricht L an die Gruppe (Comm.lua); Raider sehen beide Fenster nur lesend.
 local _, ns = ...
 
@@ -135,7 +135,7 @@ local function showRowMenu(row)
     if not entry or not canEdit() then return end
     MenuUtil.CreateContextMenu(row, function(_, root)
         root:CreateTitle(UI.StripColors((UI.GetItemDisplay(entry.itemID))))
-        root:CreateButton("Würfeln", function()
+        root:CreateButton("Verrollen (Würfelrunde starten)", function()
             ns.Rolls:StartChecked(entry.itemID, itemLink(entry.itemID), entry.lootKey)
         end)
         root:CreateButton("Aus der Beute entfernen", function()
@@ -153,7 +153,7 @@ local function initRow(row, entry)
         row.icon = row:CreateTexture(nil, "ARTWORK")
         row.icon:SetSize(ROW_HEIGHT - 6, ROW_HEIGHT - 6)
         row.icon:SetPoint("LEFT", row, "LEFT", 2, 0)
-        row.roll = UI.CreateButton(row, "Würfeln", 70, function(self)
+        row.roll = UI.CreateButton(row, "Verrollen", 76, function(self)
             local parent = self:GetParent()
             local e = parent.entry
             if not e then return end
@@ -164,6 +164,20 @@ local function initRow(row, entry)
             end
         end)
         row.roll:SetHeight(20)
+        row.roll:SetScript("OnEnter", function(self)
+            local parent = self:GetParent()
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            if parent.award and parent.canAssign then
+                GameTooltip:SetText("Zuteilen")
+                GameTooltip:AddLine("Gibt das Item als Plündermeister direkt an den Gewinner.", 1, 1, 1, true)
+            else
+                GameTooltip:SetText(parent.award and "Erneut verrollen" or "Verrollen")
+                GameTooltip:AddLine("Startet eine Würfelrunde für die Gruppe um dieses Item (Ansage im Chat). "
+                    .. "Du würfelst dabei nicht selbst.", 1, 1, 1, true)
+            end
+            GameTooltip:Show()
+        end)
+        row.roll:SetScript("OnLeave", function() GameTooltip:Hide() end)
         row.roll:SetPoint("RIGHT", row, "RIGHT", 0, 0)
         row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         row.name:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 6, -1)
@@ -183,7 +197,7 @@ local function initRow(row, entry)
             GameTooltip:SetHyperlink(itemLink(self.entry.itemID))
             if canEdit() then
                 GameTooltip:AddLine(" ")
-                GameTooltip:AddLine("Rechtsklick: würfeln oder aus der Beute entfernen", 0.6, 0.8, 1)
+                GameTooltip:AddLine("Rechtsklick: verrollen oder aus der Beute entfernen", 0.6, 0.8, 1)
             end
             GameTooltip:Show()
         end)
@@ -204,7 +218,7 @@ local function initRow(row, entry)
     if ns.Rolls:IsRolling(entry.itemID, entry.lootKey) then
         row.holders:SetText("|cffffd100wird ausgewürfelt …|r")
         row.bg:SetColorTexture(1, 0.82, 0, 0.12)
-        row.roll:SetText("Würfeln")
+        row.roll:SetText("Verrollen")
     elseif award then
         row.holders:SetText(string.format("|cff40ff40Verrollt:|r %s (%s, %d)%s", UI.ShortName(award.winner or "?"),
             ns.Rolls.LABEL[award.category] or award.category or "?", award.roll or 0,
@@ -214,7 +228,7 @@ local function initRow(row, entry)
     elseif hr then
         row.holders:SetText("|cffff5050HR: " .. (hr.note ~= "" and hr.note or "fest vergeben") .. "|r")
         row.bg:SetColorTexture(0.6, 0.1, 0.1, 0.2)
-        row.roll:SetText("Würfeln")
+        row.roll:SetText("Verrollen")
     else
         local holders, total = UI.FormatHolders(entry.itemID)
         if holders then
@@ -223,7 +237,7 @@ local function initRow(row, entry)
             row.holders:SetText("|cff808080kein SR – freier Wurf|r")
         end
         row.bg:SetColorTexture(0, 0, 0, 0)
-        row.roll:SetText("Würfeln")
+        row.roll:SetText("Verrollen")
     end
     row.roll:SetShown(canEdit())
 end
@@ -364,7 +378,7 @@ local softResWindow = createWindow({
     end,
     info = function(_, entries, editable)
         return #entries .. " Items der letzten Leiche"
-            .. (editable and " – würfeln oder für später looten (Beute)" or " – der Raidlead verteilt")
+            .. (editable and " – verrollen oder für später looten (Beute)" or " – der Raidlead verteilt")
     end,
     empty = function() return "Noch keine Leiche gelootet." end,
     anchor = function(frame)
@@ -373,11 +387,6 @@ local softResWindow = createWindow({
         else
             frame:SetPoint("LEFT", UIParent, "CENTER", 120, 0)
         end
-    end,
-    toolbarForAll = true,
-    toolbar = function(bar)
-        local beuteButton = UI.CreateButton(bar, "Beute …", 90, function() ns.ToggleBeutePanel() end)
-        beuteButton:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
     end,
 })
 

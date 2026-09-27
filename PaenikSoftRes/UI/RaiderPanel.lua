@@ -629,7 +629,7 @@ function refreshList()
     local shownRows = refreshMyReserves(s, kind)
     local headerY = -18 - shownRows * ROW_HEIGHT - 12
     filterDropdown:ClearAllPoints()
-    filterDropdown:SetPoint("TOPRIGHT", content, "TOPRIGHT", -20, headerY + 6)
+    filterDropdown:SetPoint("TOPRIGHT", content, "TOPRIGHT", -20, headerY + 11) -- etwas höher: nicht über dem ersten Item
     lootHeader:ClearAllPoints()
     lootHeader:SetPoint("TOPLEFT", content, "TOPLEFT", 0, headerY)
     lootHeader:SetPoint("RIGHT", filterDropdown, "LEFT", -8, 0)

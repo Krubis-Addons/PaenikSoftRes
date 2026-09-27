@@ -447,22 +447,6 @@ local importButton = UI.CreateButton(rules, "softres.it-Import", 150, function()
 end)
 importButton:SetPoint("LEFT", resetButton, "RIGHT", 8, 0)
 
--- Raid-ID in einer neuen Sitzung fortführen: gleiche Instanz und Regeln, gelegte Bosse bleiben markiert
-local continueButton = UI.CreateButton(rules, "Fortführen", 120, function()
-    UI.Confirm("Neue Sitzung für diese Raid-ID anlegen?\nInstanz, Regeln und gelegte Bosse werden übernommen, "
-        .. "Reserves und Verlauf nicht.", function()
-        ns.Session:Continue()
-    end)
-end)
-continueButton:SetPoint("LEFT", importButton, "RIGHT", 8, 0)
-continueButton:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_TOP")
-    GameTooltip:SetText("Raid-ID fortführen")
-    GameTooltip:AddLine("Gelegte Bosse markierst du per Rechtsklick in der Bossliste des Raider-Tabs.", 1, 1, 1, true)
-    GameTooltip:Show()
-end)
-continueButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
 -- Anzeigetext des Sitzungs-Dropdowns neu erzeugen (neue/gelöschte Sitzungen); einen Frame verzögert,
 -- weil refresh auch aus einer Menü-Antwort kommen kann
 local regenerateSessionMenu = UI.Debounce(function()
