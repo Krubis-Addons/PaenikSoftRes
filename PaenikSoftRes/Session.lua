@@ -198,6 +198,49 @@ local function newSession(leader)
     return s
 end
 
+-- Sitzung aus einer Vorlage für regelmäßige Raids (Templates.lua) für den Termin raidAt anlegen.
+-- Wird nur aktiv, wenn gerade keine eigene Sitzung aktiv ist (die Gruppe wird nicht umgeschaltet).
+-- Name einer Sitzung aus einer Vorlage, z. B. „MC Dienstag – Di, 30.09.“
+function Session.TemplateSessionName(t, raidAt)
+    return (t.name or t.instanceName or "Raid") .. " – " .. ns.UI.FormatDate(raidAt, false)
+end
+
+-- Anmeldeschluss einer Vorlage für den Termin raidAt (nil = keiner)
+function Session.TemplateDeadline(t, raidAt)
+    local hours = t.deadlineHours or -1 -- -1 = keiner, 0 = bei Raidbeginn
+    return hours >= 0 and (raidAt - hours * 3600) or nil
+end
+
+function Session:CreateFromTemplate(t, raidAt)
+    local s = newSession(ns.FullName("player"))
+    s.instanceKey = t.instanceKey
+    s.instanceName = t.instanceName
+    s.maxReserves = t.maxReserves or 1
+    s.allowDuplicates = t.allowDuplicates and true or false
+    s.templateId = t.id
+    s.raidAt = raidAt
+    s.name = Session.TemplateSessionName(t, raidAt)
+    s.nameAuto = false
+    -- Schon verstrichener Schluss (Sitzung kurz vor dem Raid angelegt): Anmeldung bis Raidbeginn
+    local deadline = Session.TemplateDeadline(t, raidAt)
+    if deadline and deadline <= GetServerTime() then
+        deadline = raidAt
+    end
+    if deadline and deadline > GetServerTime() then
+        s.deadline = deadline
+    end
+    ownSessions()[s.id] = s
+    if not ownActive() then
+        ns.char.activeSessionId = s.id
+    end
+    changed("Sitzung aus Vorlage", t.id, s.id)
+    Session:Touch(s)
+    if s == ownActive() then
+        ns:Fire("SESSION_RULES_CHANGED")
+    end
+    return s
+end
+
 -- Neue Sitzung anlegen und aktivieren (die bisherige bleibt erhalten)
 function Session:New(leader)
     local s = newSession(leader)
@@ -227,6 +270,25 @@ function Session:Reset()
     changed("Sitzung verworfen", s.id)
     ns:Fire("OWN_SESSION_DELETED", s)
     ns:Fire("SESSION_ENDED", s.id)
+end
+
+-- Beliebige eigene Sitzung löschen (Aufräumen vergangener Sitzungen); die aktive über Reset,
+-- damit die Gruppe informiert wird. Veröffentlichte bekommen eine Löschmarke (GuildSync).
+function Session:DeleteSession(s)
+    if not s or not ownSessions()[s.id] then return false end
+    if s == ownActive() then
+        self:Reset()
+        return true
+    end
+    ownSessions()[s.id] = nil
+    changed("Sitzung gelöscht", s.id)
+    ns:Fire("OWN_SESSION_DELETED", s)
+    return true
+end
+
+-- Vergangen = Sitzung mit Termin (aus einer Vorlage), deren Raid begonnen hat
+function Session.IsPast(s, now)
+    return s.raidAt ~= nil and s.raidAt <= (now or GetServerTime())
 end
 
 function Session:Rename(name)
@@ -356,6 +418,33 @@ local function applyRules(s, rules)
     if s == ownActive() then
         ns:Fire("SESSION_RULES_CHANGED")
     end
+end
+
+-- Geänderte Vorlage auf eine ihrer Sitzungen übertragen (Knopf „Aktualisieren“). raidAt = neuer Termin.
+-- Wie SetRules: ein Instanzwechsel verwirft die Reserves (die UI fragt vorher nach); die aktive Sitzung
+-- wird an die Gruppe verteilt. Ein bereits verstrichener Anmeldeschluss wird nicht neu gesetzt.
+function Session:ApplyTemplate(s, t, raidAt)
+    if not s or s.leader ~= ns.FullName("player") then return false end
+    local rules = {
+        instanceKey = t.instanceKey,
+        instanceName = t.instanceName,
+        maxReserves = t.maxReserves or 1,
+        allowDuplicates = t.allowDuplicates and true or false,
+    }
+    local deadline = Session.TemplateDeadline(t, raidAt)
+    if deadline and deadline <= GetServerTime() then
+        deadline = raidAt -- verstrichen: Anmeldung bis Raidbeginn
+    end
+    if not deadline then
+        rules.deadline = 0
+    elseif deadline > GetServerTime() then
+        rules.deadline = deadline
+    end
+    s.raidAt = raidAt
+    s.name = Session.TemplateSessionName(t, raidAt)
+    s.nameAuto = false
+    applyRules(s, rules)
+    return true
 end
 
 function Session:SetRules(rules)

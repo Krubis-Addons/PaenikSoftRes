@@ -15,4 +15,5 @@ globals = {
     "PaenikSoftResCharDB",
     "SlashCmdList",
     "SLASH_PAENIKSOFTRES1",
+    "SLASH_PAENIKSOFTRES2",
 }

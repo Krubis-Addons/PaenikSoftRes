@@ -24,6 +24,7 @@ Rolls.lua
 GargulCompat.lua
 Owned.lua
 Wishlist.lua
+Templates.lua
 Import.lua
 GuildSync.lua
 UI\MainFrame.lua
@@ -32,6 +33,7 @@ UI\RaiderPanel.lua
 UI\LeadPanel.lua
 UI\OverviewPanel.lua
 UI\LootBrowser.lua
+UI\TemplatesDialog.lua
 UI\LootPanel.lua
 UI\RollFrames.lua
 UI\ImportDialog.lua

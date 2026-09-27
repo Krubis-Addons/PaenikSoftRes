@@ -9,6 +9,20 @@ local LABEL_WIDTH = 150
 local header = UI.CreateText(panel, nil, nil, "GameFontNormalLarge")
 header:SetText("Raidlead")
 
+-- Vorlagen für regelmäßige Raids (UI/TemplatesDialog.lua), auch ohne aktive Sitzung erreichbar
+local templatesButton = UI.CreateButton(panel, "Regelmäßige Raids…", 170, function()
+    ns.ShowTemplates()
+end)
+templatesButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, 4)
+templatesButton:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+    GameTooltip:SetText("Regelmäßige Raids")
+    GameTooltip:AddLine("Vorlagen, aus denen jede Woche automatisch die Sitzung für den nächsten Termin entsteht.",
+        1, 1, 1, true)
+    GameTooltip:Show()
+end)
+templatesButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
 -- Sitzungsauswahl: alle eigenen Sitzungen, die aktive wird an die Gruppe verteilt
 local sessionLabel = UI.CreateText(panel, header, -14, "GameFontNormal")
 sessionLabel:SetWidth(LABEL_WIDTH)
@@ -34,11 +48,27 @@ local function selectSession(id)
         ns.GroupChannel() ~= nil)
 end
 
+-- Vergangene Sitzungen (Termin aus einer Vorlage hat begonnen) in einem Untermenü; die aktive steht immer oben
 sessionDropdown:SetupMenu(function(_, root)
     local sessions = ns.Session:List()
+    local now, activeID = GetServerTime(), ns.Session:GetActiveID()
+    local past = {}
     for _, s in ipairs(sessions) do
         local text = (s.name or "?") .. "  " .. UI.LockStateText(s)
-        root:CreateRadio(text, isSessionSelected, selectSession, s.id)
+        if s.id ~= activeID and ns.Session.IsPast(s, now) then
+            table.insert(past, { text = text, id = s.id })
+        else
+            if ns.Session.IsPast(s, now) then
+                text = text .. "  |cff999999(Termin vorbei)|r" -- aktive bleibt oben, auch wenn vergangen
+            end
+            root:CreateRadio(text, isSessionSelected, selectSession, s.id)
+        end
+    end
+    if #past > 0 then
+        local pastMenu = root:CreateButton("Vergangene Sitzungen (" .. #past .. ")")
+        for i = #past, 1, -1 do -- neueste zuerst
+            pastMenu:CreateRadio(past[i].text, isSessionSelected, selectSession, past[i].id)
+        end
     end
     if #sessions > 0 then
         root:CreateDivider()

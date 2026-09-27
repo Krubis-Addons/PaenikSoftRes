@@ -92,11 +92,42 @@ local guildCheck = createCheckbox(debugCheck, -4, "Gilden-Synchronisation",
         ns:Fire("SESSION_CHANGED")
     end)
 
-createCheckbox(guildCheck, -4, "Gargul-Würfelfenster öffnen (als Raidlead)",
+local gargulCheck = createCheckbox(guildCheck, -4, "Gargul-Würfelfenster öffnen (als Raidlead)",
     "Startet bei jeder Würfelrunde auch das Würfelfenster von Gargul – für Raider ohne dieses Addon. "
         .. "Wird nicht gesendet, wenn Gargul bei dir selbst geladen ist.",
     function() return ns.db.gargulCompat ~= false end,
     function(value) ns.db.gargulCompat = value end)
+
+-- Vergangene Sitzungen aus regelmäßigen Raids aufräumen (Templates.lua)
+local PAST_DAYS = { 0, 3, 7, 14, 30 }
+
+local pastLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+pastLabel:SetPoint("TOPLEFT", gargulCheck, "BOTTOMLEFT", 4, -18)
+pastLabel:SetText("Vergangene Sitzungen löschen:")
+
+local pastDropdown = CreateFrame("DropdownButton", nil, panel, "WowStyle1DropdownTemplate")
+pastDropdown:SetWidth(160)
+pastDropdown:SetPoint("LEFT", pastLabel, "RIGHT", 10, 0)
+pastDropdown:SetupMenu(function(_, root)
+    for _, days in ipairs(PAST_DAYS) do
+        root:CreateRadio(days == 0 and "Nie" or ("nach " .. days .. " Tagen"),
+            function(value) return ((ns.db and ns.db.pastSessionDays) or 0) == value end,
+            function(value)
+                ns.db.pastSessionDays = value
+                ns.Templates:Cleanup()
+            end,
+            days)
+    end
+end)
+pastDropdown:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Vergangene Sitzungen löschen")
+    GameTooltip:AddLine("Sitzungen aus regelmäßigen Raids werden so viele Tage nach ihrem Termin gelöscht. "
+        .. "Die aktive Sitzung bleibt immer erhalten.", 1, 1, 1, true)
+    GameTooltip:Show()
+end)
+pastDropdown:SetScript("OnLeave", function() GameTooltip:Hide() end)
+table.insert(refreshers, function() pastDropdown:SignalUpdate() end)
 
 -- Blizzard ruft OnRefresh beim Anzeigen der Seite auf
 function panel:OnRefresh()

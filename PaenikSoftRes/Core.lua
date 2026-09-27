@@ -11,6 +11,7 @@ local defaults = {
     debug = false, -- Debug-Log und Testbefehle (Optionen oder /paeniksoftres debug)
     guildSync = true, -- Gilden-Synchronisation (GuildSync.lua)
     gargulCompat = true, -- Würfelrunden auch an Gargul senden (GargulCompat.lua)
+    pastSessionDays = 14, -- vergangene Vorlagen-Sitzungen nach so vielen Tagen löschen (0 = nie, Templates.lua)
     -- forceRole: nil = automatisch, "lead" oder "raider" (zum Testen)
     -- sessions, activeSessionId, remoteSession: Soft-Reserve-Sitzungen, siehe Session.lua
 }
@@ -303,9 +304,11 @@ local TEST_COMMANDS = {
     fake = function() ns.AddFakeReserves() end,
     probe = function() ns.RunProbe() end,
     gargultest = function() ns.GargulCompat:SelfTest() end,
+    vorlagetest = function(arg) ns.Templates:DebugTest(arg) end,
 }
 
 SLASH_PAENIKSOFTRES1 = "/paeniksoftres"
+SLASH_PAENIKSOFTRES2 = "/psr" -- Kurzform
 SlashCmdList.PAENIKSOFTRES = function(msg)
     local raw = strtrim(msg or "")
     local cmd, rest = raw:match("^(%S*)%s*(.*)$")
@@ -335,14 +338,14 @@ SlashCmdList.PAENIKSOFTRES = function(msg)
         ns.Print("Loot-Panel " .. (ns.db.lootPanel and "an" or "aus"))
     elseif TEST_COMMANDS[msg] then
         if ns.db.debug then
-            TEST_COMMANDS[msg]()
+            TEST_COMMANDS[msg](rest:lower())
         else
             ns.Print("Testbefehl – erst mit /paeniksoftres debug freischalten.")
         end
     else
         ns.Print("Befehle: show, hide, toggle, options, minimap, roll <Item>, lootpanel [reset], debug")
         if ns.db.debug then
-            ns.Print("Testbefehle: probe, fake, loottest, gargultest, lead, raider, auto")
+            ns.Print("Testbefehle: probe, fake, loottest, gargultest, vorlagetest [vorbei], lead, raider, auto")
         end
     end
 end
