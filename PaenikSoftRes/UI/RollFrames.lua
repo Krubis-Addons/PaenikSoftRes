@@ -238,10 +238,26 @@ leadResult:SetPoint("BOTTOMLEFT", leadFrame, "BOTTOMLEFT", 14, 40)
 leadResult:SetPoint("RIGHT", leadFrame, "RIGHT", -12, 0)
 leadResult:SetJustifyH("LEFT")
 
+-- Manuelle Runde: Klick auf einen Spieler mit Wurf wählt ihn (nach Rückfrage) als Gewinner
+local function onStandingClick(row)
+    local data = row.data
+    if not data or not data.roll or not Rolls:CanChooseWinner() then return end
+    local round = Rolls:GetLeadRound()
+    local itemName = round and UI.GetItemDisplay(round.itemID) or "?"
+    UI.Confirm(string.format("%s gewinnt %s?\n%s, Wurf %d", UI.ShortName(data.player), itemName,
+        Rolls.LABEL[data.category] or data.category or "?", data.roll), function()
+        Rolls:ChooseWinner(data.player)
+    end)
+end
+
 local function initStandingRow(row, data)
     if not row.name then
         row.bg = row:CreateTexture(nil, "BACKGROUND")
         row.bg:SetAllPoints()
+        row.highlight = row:CreateTexture(nil, "HIGHLIGHT")
+        row.highlight:SetAllPoints()
+        row.highlight:SetColorTexture(1, 1, 1, 0.1)
+        row:SetScript("OnClick", onStandingClick)
         row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
         row.name:SetWidth(140)
@@ -252,6 +268,9 @@ local function initStandingRow(row, data)
         row.roll = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         row.roll:SetPoint("RIGHT", row, "RIGHT", -6, 0)
     end
+    row.data = data
+    -- Hervorhebung beim Überfahren nur, wenn der Spieler wählbar ist
+    row.highlight:SetShown(data.roll ~= nil and Rolls:CanChooseWinner())
     row.name:SetText(UI.ShortName(data.player))
     row.category:SetText(colored(data.category))
     -- Wurf mit Bereich, z. B. "37 / 50"
@@ -295,7 +314,9 @@ local function updateTimer()
     for _, entry in pairs(round.rolls) do
         if entry.roll then count = count + 1 end
     end
-    if round.endsAt and not round.ended then
+    if round.choosing and not round.ended then
+        leadTimer:SetText(string.format("Würfe geschlossen – %d Würfe", count))
+    elseif round.endsAt and not round.ended then
         leadTimer:SetText(string.format("%s – %d Würfe (endet automatisch)", remainingText(round), count))
     else
         local elapsed = math.floor(GetTime() - round.startedAt)
@@ -326,15 +347,25 @@ function refreshLead()
     end
     standingsList:SetDataProvider(CreateDataProvider(standings), ScrollBoxConstants.RetainScrollPosition)
 
-    endButton:SetShown(not round.ended)
+    local choosing = Rolls:IsChoosing()
+    endButton:SetShown(not round.ended and not choosing)
+    endButton:SetText(round.manual and "Würfeln beenden" or "Beenden")
     cancelButton:SetShown(not round.ended)
     closeButton:SetShown(round.ended == true)
     rerollLeadButton:SetShown(round.ended == true and round.tied ~= nil)
     if round.ended then
         leadResult:SetText(resultText(round.result))
         if ticker then ticker:Cancel() ticker = nil end
+    elseif choosing then
+        leadResult:SetText("|cffffd100Würfeln beendet – Klick auf einen Spieler wählt den Gewinner.|r")
+        if ticker then ticker:Cancel() ticker = nil end
     else
-        leadResult:SetText(tie and "|cffff6060Gleichstand an der Spitze|r" or "")
+        if round.manual then
+            leadResult:SetText("|cff999999Gewinner manuell: Klick auf einen Spieler wählt ihn.|r"
+                .. (tie and "  |cffff6060Gleichstand|r" or ""))
+        else
+            leadResult:SetText(tie and "|cffff6060Gleichstand an der Spitze|r" or "")
+        end
         if not ticker then
             ticker = C_Timer.NewTicker(1, updateTimer)
         end

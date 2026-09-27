@@ -230,7 +230,7 @@ end)
 publishCheck:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
 local guildInfo = rules:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-guildInfo:SetPoint("LEFT", publishCheck.Text, "RIGHT", 10, 0)
+guildInfo:SetPoint("TOPLEFT", publishCheck.Text, "BOTTOMLEFT", 0, -2) -- darunter: rechts beginnt der Kasten „Würfeln“
 
 -- Anmeldeschluss: optionaler Zeitpunkt, danach ist die Sitzung automatisch geschlossen
 local DEFAULT_HOUR, DEFAULT_MIN = 20, 0
@@ -323,12 +323,37 @@ timeDropdown:SetupMenu(function(_, root)
     end
 end)
 
--- Würfelzeit: Zeitfenster für Würfelrunden (persönliche Einstellung des Raidleads, auch in den Optionen)
-local durationLabel = createLabel("Würfelzeit:", deadlineLabel, -22)
+-- Einstellungen für alle Sitzungen (persönlich, nicht Teil der Sitzung): eigener, abgesetzter Kasten rechts,
+-- auch ohne aktive Sitzung sichtbar. Ebenfalls in den Optionen.
+local GLOBAL_BOX_WIDTH = 250
 
-local durationDropdown = CreateFrame("DropdownButton", nil, rules, "WowStyle1DropdownTemplate")
-durationDropdown:SetWidth(160)
-durationDropdown:SetPoint("LEFT", durationLabel, "RIGHT", 0, 0)
+local globalBox = CreateFrame("Frame", nil, panel)
+globalBox:SetSize(GLOBAL_BOX_WIDTH, 196)
+globalBox:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, -74)
+local globalBg = globalBox:CreateTexture(nil, "BACKGROUND")
+globalBg:SetAllPoints()
+globalBg:SetColorTexture(1, 1, 1, 0.05)
+local globalBorder = globalBox:CreateTexture(nil, "BORDER")
+globalBorder:SetPoint("TOPLEFT")
+globalBorder:SetPoint("TOPRIGHT")
+globalBorder:SetHeight(2)
+globalBorder:SetColorTexture(1, 0.82, 0, 0.6)
+
+local globalTitle = globalBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+globalTitle:SetPoint("TOPLEFT", globalBox, "TOPLEFT", 10, -10)
+globalTitle:SetText("Würfeln")
+local globalSubtitle = globalBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+globalSubtitle:SetPoint("TOPLEFT", globalTitle, "BOTTOMLEFT", 0, -3)
+globalSubtitle:SetText("|cff999999Gilt für alle Sitzungen (deine Einstellung)|r")
+
+-- Würfelzeit: Zeitfenster für Würfelrunden
+local durationLabel = globalBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+durationLabel:SetPoint("TOPLEFT", globalSubtitle, "BOTTOMLEFT", 0, -16)
+durationLabel:SetText("Würfelzeit:")
+
+local durationDropdown = CreateFrame("DropdownButton", nil, globalBox, "WowStyle1DropdownTemplate")
+durationDropdown:SetWidth(150)
+durationDropdown:SetPoint("LEFT", durationLabel, "RIGHT", 8, 0)
 
 durationDropdown:SetupMenu(function(_, root)
     for _, seconds in ipairs(ns.Rolls.DURATIONS) do
@@ -342,8 +367,41 @@ durationDropdown:SetupMenu(function(_, root)
     end
 end)
 
-local durationHint = UI.CreateText(rules, durationLabel, -10, "GameFontHighlightSmall")
+local durationHint = globalBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+durationHint:SetPoint("TOPLEFT", durationLabel, "BOTTOMLEFT", 0, -12)
+durationHint:SetWidth(GLOBAL_BOX_WIDTH - 20)
+durationHint:SetJustifyH("LEFT")
 durationHint:SetText("Mit Zeitfenster endet die Runde automatisch; vorzeitiges Beenden bleibt möglich.")
+
+-- Gewinner manuell wählen
+local manualWinnerCheck = CreateFrame("CheckButton", nil, globalBox, "UICheckButtonTemplate")
+manualWinnerCheck:SetPoint("TOPLEFT", durationHint, "BOTTOMLEFT", -4, -8)
+manualWinnerCheck.Text:SetText("Gewinner manuell wählen")
+manualWinnerCheck.Text:SetFontObject("GameFontHighlight")
+manualWinnerCheck:SetScript("OnClick", function(self)
+    ns.db.manualWinner = self:GetChecked() and true or false
+end)
+manualWinnerCheck:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Gewinner manuell wählen")
+    GameTooltip:AddLine("Der Gewinner einer Würfelrunde wird nicht automatisch aus dem höchsten Wurf bestimmt: "
+        .. "Im Leitfenster wählst du ihn per Klick aus allen Würfelnden. „Würfeln beenden“ bzw. das Zeitfenster "
+        .. "schließt nur die Würfe. Gilt für neu gestartete Runden.", 1, 1, 1, true)
+    GameTooltip:Show()
+end)
+manualWinnerCheck:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+-- Sitzungs- und Statustext enden links vom Kasten (sonst läuft ein langer Text darunter)
+for _, text in ipairs({ sessionText, lockText }) do
+    text:SetPoint("RIGHT", globalBox, "LEFT", -12, 0)
+    text:SetJustifyH("LEFT")
+end
+
+-- Stand bei jedem Anzeigen übernehmen (auch in den Optionen änderbar)
+globalBox:SetScript("OnShow", function()
+    manualWinnerCheck:SetChecked(ns.db and ns.db.manualWinner == true)
+    durationDropdown:SignalUpdate()
+end)
 
 -- Unten: weitere Sitzung anlegen / aktive löschen / Import
 local restartButton = UI.CreateButton(rules, "Neue Sitzung", 140, newSession)

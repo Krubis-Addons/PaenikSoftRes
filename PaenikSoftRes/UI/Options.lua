@@ -98,11 +98,17 @@ local gargulCheck = createCheckbox(guildCheck, -4, "Gargul-Würfelfenster öffne
     function() return ns.db.gargulCompat ~= false end,
     function(value) ns.db.gargulCompat = value end)
 
+local manualWinnerCheck = createCheckbox(gargulCheck, -4, "Gewinner manuell wählen (als Raidlead)",
+    "Der Gewinner einer Würfelrunde wird nicht automatisch bestimmt: Im Leitfenster wählst du ihn per Klick "
+        .. "aus allen Würfelnden. Auch im Raidlead-Tab einstellbar.",
+    function() return ns.db.manualWinner == true end,
+    function(value) ns.db.manualWinner = value end)
+
 -- Vergangene Sitzungen aus regelmäßigen Raids aufräumen (Templates.lua)
 local PAST_DAYS = { 0, 3, 7, 14, 30 }
 
 local pastLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-pastLabel:SetPoint("TOPLEFT", gargulCheck, "BOTTOMLEFT", 4, -18)
+pastLabel:SetPoint("TOPLEFT", manualWinnerCheck, "BOTTOMLEFT", 4, -18)
 pastLabel:SetText("Vergangene Sitzungen löschen:")
 
 local pastDropdown = CreateFrame("DropdownButton", nil, panel, "WowStyle1DropdownTemplate")

@@ -10,7 +10,7 @@
 | 7 | softres.it-Import | `Import.lua` + `UI/ImportDialog.lua`: CSV-Export von softres.it, Vorschau, „Ersetzen“ oder „Zusammenführen“ (Mischbetrieb), Quelle `softres` (Übersicht hellblau). |
 | 8 | Feinschliff | Bestätigungsdialoge (`UI.Confirm`), Optionen-Seite im Blizzard-Menü (`UI/Options.lua`), Debug-Log und Testbefehle standardmäßig aus, Gargul-Export-Import (LibDeflate in `Libs/`), Forever-Dungeons als Testdaten (`Data/Instances/ForeverDungeons.lua`), Gesamt-Review mit `wow-reviewer` und dessen Befunde behoben. |
 
-Status: Iterationen 1–8 umgesetzt, dazu Anmeldeschluss, mehrere Sitzungen und Gilden-Synchronisation (Anmeldung ohne Gruppe), Weitergabe von Anmeldungen über die Gilde, ID fortführen (gelegte Bosse) und Hard Reserves, Gargul-Würfelfenster für Raider ohne dieses Addon, Besitz-Anzeige in der SR-Auswahl, Wunschliste, Sitzungsdaten pro Charakter, Loot-Browser, Reserves vom Raidlead für Spieler ohne Addon, regelmäßige Raids (Vorlagen mit automatischen Folgeterminen), Loot-Filter.
+Status: Iterationen 1–8 umgesetzt, dazu Anmeldeschluss, mehrere Sitzungen und Gilden-Synchronisation (Anmeldung ohne Gruppe), Weitergabe von Anmeldungen über die Gilde, ID fortführen (gelegte Bosse) und Hard Reserves, Gargul-Würfelfenster für Raider ohne dieses Addon, Besitz-Anzeige in der SR-Auswahl, Wunschliste, Sitzungsdaten pro Charakter, Loot-Browser, Reserves vom Raidlead für Spieler ohne Addon, regelmäßige Raids (Vorlagen mit automatischen Folgeterminen), Loot-Filter, Gewinner manuell wählen.
 
 Offen / später:
 - Encounter-Journal-Provider (`Data/EJProvider.lua`), sobald Blizzard das EJ in Forever aktiviert: Loot nachladen (`EJ_LOOT_DATA_RECIEVED` → Anzeige-Cache leeren), `EJ_ResetLootFilter()` vor dem Auslesen, Instanzliste cachen.
@@ -20,7 +20,6 @@ Offen / später:
 - Tests in einer Gruppe mit Gargul-Nutzern: Gargul-Würfelfenster öffnet/schließt sich, Würfe kommen an.
 
 Ideen (später umsetzen):
-- **Gewinner manuell wählen:** Option (pro Runde oder als Einstellung), dass der Gewinner nicht automatisch der höchste Wurf ist: Beim Beenden wählt der Raidlead im Leitfenster aus der Liste aller Würfelnden (mit Kategorie und Wurf) den Gewinner; Ansage, `RE`, Verlauf und Wunschliste laufen danach wie beim automatischen Gewinner.
 - **„Soft Reserves“-Fenster überarbeiten (separat öffnen, aus dem Inventar verwürfeln):** siehe Umsetzungsidee unten.
 
 ## Umsetzungsidee: „Soft Reserves“-Fenster separat öffnen und Items aus dem Inventar verwürfeln

@@ -242,6 +242,7 @@ function Rolls:Start(itemID, link, restrictTo, category, freeReason, lootKey)
         rolls = {},
         startedAt = GetTime(),
         duration = duration,
+        manual = self:IsManualWinner(), -- Gewinner wählt der Raidlead (siehe ChooseWinner)
     }
     if duration > 0 then
         leadRound.endsAt = GetTime() + duration
@@ -340,9 +341,26 @@ local function addHistory(itemID, winner, roll, category, lootKey)
     ns:Fire("SESSION_CHANGED")
 end
 
+-- Gewinner manuell wählen (Einstellung db.manualWinner, beim Start der Runde übernommen):
+-- „Beenden“ bzw. das Zeitfenster schließt nur die Würfe; der Raidlead wählt den Gewinner im Leitfenster
+-- aus allen Würfelnden (Rolls:ChooseWinner). Auch während der Runde kann er direkt wählen.
+function Rolls:IsManualWinner()
+    return ns.db and ns.db.manualWinner == true
+end
+
+function Rolls:CanChooseWinner()
+    return leadRound ~= nil and leadRound.manual == true and not leadRound.ended
+end
+
+function Rolls:IsChoosing()
+    return leadRound ~= nil and leadRound.choosing == true and not leadRound.ended
+end
+
+local finish -- forward
+
 -- byTimer: vom Zeitfenster beendet (nicht vom Raidlead)
 function Rolls:End(byTimer)
-    if not leadRound or leadRound.ended then return end
+    if not leadRound or leadRound.ended or leadRound.choosing then return end
     local winner, tied = self:GetWinner()
     if byTimer and leadRound.restricted and not winner and not tied then
         switchToFreeForAll("keine Würfe der Berechtigten")
@@ -350,10 +368,37 @@ function Rolls:End(byTimer)
     end
     stopTimer()
     ns.GargulCompat:SendStop()
+    if leadRound.manual and (winner or tied) then
+        -- Würfe schließen, Raidlead wählt den Gewinner
+        leadRound.choosing = true
+        ns.SendGroupChat("Würfeln auf " .. leadRound.link .. " beendet – der Raidlead wählt den Gewinner.")
+        ns.Debug("Rolls", "Runde geschlossen, Gewinner wird gewählt", leadRound.id)
+        changed()
+        return
+    end
+    finish(self, winner, tied)
+end
+
+-- Raidlead wählt den Gewinner (manuelle Runde): jeder mit einem Wurf ist wählbar
+function Rolls:ChooseWinner(player)
+    if not self:CanChooseWinner() then return false end
+    local entry = leadRound.rolls[player]
+    if not entry or not entry.roll then return false end
+    if not leadRound.choosing then
+        stopTimer()
+        ns.GargulCompat:SendStop()
+    end
+    ns.Debug("Rolls", "Gewinner gewählt", leadRound.id, player)
+    finish(self, { player = player, roll = entry.roll, category = entry.category }, nil, true)
+    return true
+end
+
+-- Ergebnis verkünden, verteilen und speichern; chosen = vom Raidlead gewählt
+function finish(self, winner, tied, chosen)
     local link = leadRound.link
     if winner then
-        ns.SendGroupChat(string.format("Gewinner %s: %s (%s, %d)", link, ns.UI.ShortName(winner.player),
-            Rolls.LABEL[winner.category], winner.roll))
+        ns.SendGroupChat(string.format("Gewinner %s: %s (%s, %d)%s", link, ns.UI.ShortName(winner.player),
+            Rolls.LABEL[winner.category] or winner.category, winner.roll, chosen and " – vom Raidlead gewählt" or ""))
         ns.Comm:SendGroup("RE", leadRound.id, winner.player, winner.roll, winner.category, leadRound.lootKey or "")
         addHistory(leadRound.itemID, winner.player, winner.roll, winner.category, leadRound.lootKey)
     elseif tied then
@@ -433,7 +478,7 @@ end)
 
 -- Passen eines Spielers beim Raidlead eintragen (die übrigen Kategorien ergeben sich aus dem Würfelbereich)
 local function applyPass(player)
-    if not leadRound or leadRound.ended then return end
+    if not leadRound or leadRound.ended or leadRound.choosing then return end
     local entry = leadRound.rolls[player] or {}
     if entry.roll then return end -- schon gewürfelt: Passen zählt nicht mehr
     entry.category = "PASS"
@@ -488,7 +533,8 @@ end
 -- Würfe aus dem Chat (nur beim Raidlead) ---------------------------------------------
 
 function ns:CHAT_MSG_SYSTEM(text)
-    if not leadRound or leadRound.ended then return end
+    -- nach „Beenden“ in einer manuellen Runde (Gewinner wird gewählt) zählen keine Würfe mehr
+    if not leadRound or leadRound.ended or leadRound.choosing then return end
     if issecretvalue and issecretvalue(text) then
         if not leadRound.secretWarned then
             leadRound.secretWarned = true

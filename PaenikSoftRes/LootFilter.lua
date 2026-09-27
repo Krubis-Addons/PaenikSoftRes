@@ -131,7 +131,13 @@ end
 
 -- Filterstand -----------------------------------------------------------------------
 
+local EMPTY = { types = {}, slots = {} }
+
 local function state()
+    -- Vor ADDON_LOADED (SetupMenu wertet die Häkchen schon beim Laden der Datei aus): kein Filter
+    if not ns.char then
+        return EMPTY
+    end
     ns.char.lootFilter = ns.char.lootFilter or {}
     local f = ns.char.lootFilter
     f.types = f.types or {}
