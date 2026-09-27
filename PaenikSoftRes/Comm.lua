@@ -579,7 +579,10 @@ function ns:CHAT_MSG_ADDON(prefix, text, _, sender)
     end
     -- Gezielte Nachricht (1^@^Empfänger^Typ^...): nur für uns bestimmt, sonst ignorieren
     if f[2] == "@" then
-        if (f[3] or ""):lower() ~= ns.FullName("player"):lower() then return end
+        if (f[3] or ""):lower() ~= ns.FullName("player"):lower() then
+            ns.Debug("Comm", "Gezielte Nachricht nicht für mich:", sender, "an", f[3] or "?", f[4] or "?")
+            return
+        end
         table.remove(f, 2)
         table.remove(f, 2)
     end

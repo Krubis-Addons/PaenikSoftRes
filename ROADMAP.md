@@ -24,4 +24,6 @@ Offen / später:
 - Gemeinsame Raidleiter (zwei Personen in der Gilde): Rang-Einstellung des Gildenmeisters kommt an, Gildensitzung übernehmen, Änderungen gegenseitig übernehmen, Anmeldungen an den zuletzt Ändernden, Mitglied unterhalb des Rangs sieht nichts.
 
 Ideen (später umsetzen):
+- **Kommunikation v2 (AceComm + LibSerialize + LibDeflate):** große Nachrichten (voller Stand `P`/`GP`, Beute `L`, Hard Reserves) serialisiert, komprimiert und von AceComm gestückelt statt eigener Stückelung; kleine Nachrichten bleiben. Erwarteter Gewinn: weniger Nachrichten bei großen Ständen (40 Raider × 3 SR heute ~8 Nachrichten, komprimiert ~2–3), weniger eigener Stückel-Code. Kosten: CallbackHandler + ChatThrottleLib zusätzlich, Protokollwechsel (alle müssen gleichzeitig aktualisieren, VERSION 2), Kampfsperre-Verhalten von ChatThrottleLib in Forever vorher prüfen. AceSerializer nicht nötig (LibSerialize ist schon da).
+  **Wann darüber nachdenken:** erst wenn die Gruppen- und Gildentests (siehe „Offen / später“) stabil laufen **und** in 25er/40er-Raids spürbare Verzögerungen beim Sync auftreten (z. B. Reserves kommen erst nach Sekunden an, „Senden verzögert“ im Debug-Log, Drosselungs-Meldungen) oder die Gilden-Weitergabe bei vielen Sitzungen zu langsam wird. Dann zuerst nur den vollen Stand umstellen.
 
