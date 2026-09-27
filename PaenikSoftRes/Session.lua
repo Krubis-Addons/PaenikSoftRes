@@ -1025,6 +1025,102 @@ function Session:ApplyRemoteHardReserves(sessionID, text, clear)
     changed("Hard Reserves vom Raidlead", sessionID)
 end
 
+-- Verteilliste („Soft Reserves“-Fenster): Items, die der Raidlead verteilt – aus Leichen (beim Looten)
+-- oder aus den Taschen (Drag & Drop). s.lootList = { { itemID, lootKey, addedAt }, ... }; lootKey verbindet
+-- Eintrag und Würfel-Ergebnis (Verlauf). Kein Session:Touch: die Liste gehört nicht zur Gilden-Kopie.
+
+-- entries = { { itemID, lootKey }, ... }; gibt die Anzahl neuer Einträge zurück
+function Session:AddLootEntries(s, entries)
+    if not s then return 0 end
+    s.lootList = s.lootList or {}
+    local known = {}
+    for _, entry in ipairs(s.lootList) do
+        known[entry.lootKey] = true
+    end
+    local added = 0
+    for _, entry in ipairs(entries) do
+        if entry.itemID and entry.lootKey and not known[entry.lootKey] then
+            known[entry.lootKey] = true
+            table.insert(s.lootList, { itemID = entry.itemID, lootKey = entry.lootKey, addedAt = GetServerTime() })
+            added = added + 1
+        end
+    end
+    if added > 0 then
+        changed("Verteilliste ergänzt", added)
+    end
+    return added
+end
+
+function Session:RemoveLootEntry(s, lootKey)
+    if not s or not s.lootList then return false end
+    for i, entry in ipairs(s.lootList) do
+        if entry.lootKey == lootKey then
+            table.remove(s.lootList, i)
+            changed("Verteilliste: Eintrag entfernt", lootKey)
+            return true
+        end
+    end
+    return false
+end
+
+function Session:ClearLootList(s)
+    if not s or not s.lootList or #s.lootList == 0 then return false end
+    s.lootList = {}
+    changed("Verteilliste geleert")
+    return true
+end
+
+-- „itemID=lootKey“-Einträge für die Nachricht L
+function Session:LootListToEntries(s)
+    local list = {}
+    for _, entry in ipairs(s and s.lootList or {}) do
+        table.insert(list, entry.itemID .. "=" .. entry.lootKey)
+    end
+    return list
+end
+
+-- Leiche eines Eintrags: Teil des lootKey vor dem ersten „:“ (GUID der Leiche; bei Taschen-Items „bag“)
+function Session.LootCorpse(lootKey)
+    return lootKey and lootKey:match("^([^:]+):") or nil
+end
+
+-- Zuletzt gelootete Leiche (Raidlead): das „Soft Reserves“-Fenster zeigt nur ihre Items
+function Session:SetCurrentCorpse(s, corpse)
+    if not s or s.currentCorpse == corpse then return end
+    s.currentCorpse = corpse
+    changed("Aktuelle Leiche", corpse)
+end
+
+-- Verteilliste vom Raidlead übernehmen; clear = erstes Stück (vorher leeren), corpse = zuletzt gelootete
+-- Leiche. Gibt die Anzahl neuer Einträge zurück.
+function Session:ApplyRemoteLootList(sessionID, text, clear, corpse)
+    local s = self:Get()
+    if not s or s.id ~= sessionID then return 0 end
+    if corpse and corpse ~= "" then
+        s.currentCorpse = corpse
+    end
+    local before = {}
+    for _, entry in ipairs(s.lootList or {}) do
+        before[entry.lootKey] = true
+    end
+    if clear then
+        s.lootList = {}
+    end
+    local entries, fresh = {}, 0
+    for part in (text or ""):gmatch("[^;]+") do
+        local itemID, lootKey = part:match("^(%d+)=(.+)$")
+        if itemID then
+            table.insert(entries, { itemID = tonumber(itemID), lootKey = lootKey })
+            if not before[lootKey] then
+                fresh = fresh + 1
+            end
+        end
+    end
+    self:AddLootEntries(s, entries)
+    changed("Verteilliste vom Raidlead", sessionID)
+    return fresh
+end
+
 function Session:ApplyRemoteEnd(sessionID)
     local s = self:GetRemote()
     if s and s.id == sessionID then

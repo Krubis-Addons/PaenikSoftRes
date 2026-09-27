@@ -60,6 +60,8 @@ end)
 button:SetScript("OnClick", function(_, mouseButton)
     if mouseButton == "RightButton" then
         ns.OpenOptions()
+    elseif IsShiftKeyDown() then
+        ns.ToggleLootPanel() -- „Soft Reserves“-Fenster (letzte Leiche)
     else
         ns.ToggleMainFrame()
     end
@@ -69,6 +71,7 @@ button:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:SetText(ns.TITLE)
     GameTooltip:AddLine("Klick: Fenster öffnen/schließen", 1, 1, 1)
+    GameTooltip:AddLine("Shift-Klick: „Soft Reserves“-Fenster", 1, 1, 1)
     GameTooltip:AddLine("Rechtsklick: Optionen", 1, 1, 1)
     GameTooltip:AddLine("Ziehen: Button verschieben", 1, 1, 1)
     GameTooltip:Show()

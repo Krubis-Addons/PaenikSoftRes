@@ -8,6 +8,8 @@
 --   1^F^sid                                           Lead → Gruppe: voller Stand folgt (Reserves leeren)
 --   1^P^sid^Name-Realm=id,id;Name-Realm=...           Lead → Gruppe: Reserves (mehrere Spieler)
 --   1^H^sid^leeren(1/0)^itemID=Notiz;...              Lead → Gruppe: Hard Reserves
+--   1^L^sid^leeren(1/0)^öffnen(1/0)^Leiche^itemID=lootKey;...  Lead → Gruppe: gelootete Items (Beute),
+--                                    Leiche = zuletzt gelootete (GUID; „Soft Reserves“-Fenster zeigt nur sie)
 --   1^E^sid                                           Lead → Gruppe: Sitzung beendet
 --   1^Q                                               Raider → Gruppe: Stand anfordern
 --   1^S^sid^id,id                                     Raider → Lead (gezielt): eigene Reserves
@@ -207,6 +209,30 @@ local function sendHardReserves()
     flush(first) -- ohne Einträge trotzdem einmal senden (leert die Liste)
 end
 
+-- Verteilliste in Stücken; das erste leert beim Empfänger, open = 1: Raider öffnen das Fenster (Raidlead lootet)
+local function sendLootList(open)
+    local s = ns.Session:Get()
+    local channel = groupChannel()
+    if not s or not channel then return end
+    local corpse = s.currentCorpse or ""
+    local head = table.concat({ VERSION, "L", s.id, 1, 1, corpse }, SEP) .. SEP
+    local chunk, length, first = {}, #head, true
+    local function flush(force)
+        if #chunk > 0 or force then
+            send(channel, nil, "L", s.id, first and 1 or 0, open and 1 or 0, corpse, table.concat(chunk, ";"))
+            chunk, length, first = {}, #head, false
+        end
+    end
+    for _, entry in ipairs(ns.Session:LootListToEntries(s)) do
+        if length + #entry + 1 > MAX_LEN then
+            flush()
+        end
+        table.insert(chunk, entry)
+        length = length + #entry + 1
+    end
+    flush(first) -- ohne Einträge trotzdem einmal senden (leert die Liste)
+end
+
 local function sendFullState()
     local s = ns.Session:Get()
     local channel = groupChannel()
@@ -214,6 +240,7 @@ local function sendFullState()
     sendRules()
     send(channel, nil, "F", s.id)
     sendHardReserves()
+    sendLootList(false)
     local players = {}
     for player in pairs(s.reserves) do
         table.insert(players, player)
@@ -224,6 +251,7 @@ end
 
 -- Entprellen: mehrere Änderungen kurz hintereinander → wenige Nachrichten.
 local pendingRules, pendingPlayers, pendingFull, pendingHR = false, {}, false, false
+local pendingLoot, pendingLootOpen = false, false
 
 local function flushPending()
     if ns.Session:IsMaster() and groupChannel() then
@@ -236,6 +264,9 @@ local function flushPending()
             if pendingHR then
                 sendHardReserves()
             end
+            if pendingLoot then
+                sendLootList(pendingLootOpen)
+            end
             local players = {}
             for player in pairs(pendingPlayers) do
                 table.insert(players, player)
@@ -246,6 +277,7 @@ local function flushPending()
         end
     end
     pendingRules, pendingFull, pendingHR = false, false, false
+    pendingLoot, pendingLootOpen = false, false
     wipe(pendingPlayers)
 end
 
@@ -276,6 +308,13 @@ end)
 
 ns:On("SESSION_HR_CHANGED", function()
     pendingHR = true
+    scheduleFlush()
+end)
+
+-- Verteilliste geändert (LootList); open = true: Raider sollen das Fenster öffnen
+ns:On("SESSION_LOOT_CHANGED", function(open)
+    pendingLoot = true
+    pendingLootOpen = pendingLootOpen or open == true
     scheduleFlush()
 end)
 
@@ -433,6 +472,15 @@ end
 function handlers.H(sender, f)
     if isFromSessionLeader(sender, f[3]) then
         ns.Session:ApplyRemoteHardReserves(f[3], f[5], f[4] == "1")
+    end
+end
+
+-- Verteilliste vom Raidlead: L^sid^leeren^öffnen^Leiche^itemID=lootKey;...
+function handlers.L(sender, f)
+    if not isFromSessionLeader(sender, f[3]) then return end
+    local fresh = ns.Session:ApplyRemoteLootList(f[3], f[7], f[4] == "1", f[6])
+    if f[5] == "1" and fresh > 0 then
+        ns:Fire("LOOT_LIST_OPEN")
     end
 end
 

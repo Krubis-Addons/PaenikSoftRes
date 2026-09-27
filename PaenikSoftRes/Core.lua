@@ -199,6 +199,18 @@ function ns.GroupMembers()
     return list
 end
 
+-- Loot ab Qualität für „Soft Reserves“ und „Beute“ (db.lootMinQuality), aufsteigend:
+-- „Selten“ = Selten + Episch + Legendär. Hier, weil Menüs in UI-Dateien sie schon beim Laden brauchen.
+do
+    local Q = Enum.ItemQuality or { Uncommon = 2, Rare = 3, Epic = 4, Legendary = 5 }
+    ns.LOOT_QUALITIES = {
+        { value = Q.Uncommon, text = "Ungewöhnlich" },
+        { value = Q.Rare, text = "Selten" },
+        { value = Q.Epic, text = "Episch" },
+        { value = Q.Legendary, text = "Legendär" },
+    }
+end
+
 -- Diese Zeichen trennen Felder im Sync-Protokoll (Comm.lua) und dürfen nicht in Namen stehen
 ns.INVALID_NAME_PATTERN = "[%^;=,|]"
 
@@ -331,6 +343,10 @@ SlashCmdList.PAENIKSOFTRES = function(msg)
         ns.SetDebug(not ns.db.debug)
     elseif msg == "roll" then
         ns.StartRollFromSlash(rest)
+    elseif msg == "loot" then
+        ns.ToggleLootPanel()
+    elseif msg == "beute" then
+        ns.ToggleBeutePanel()
     elseif msg == "lootpanel" and rest:lower() == "reset" then
         ns.ResetLootPanelPosition()
         ns.Print("Loot-Panel dockt wieder am Lootfenster an.")
@@ -344,7 +360,7 @@ SlashCmdList.PAENIKSOFTRES = function(msg)
             ns.Print("Testbefehl – erst mit /paeniksoftres debug freischalten.")
         end
     else
-        ns.Print("Befehle: show, hide, toggle, options, minimap, roll <Item>, lootpanel [reset], debug")
+        ns.Print("Befehle: show, hide, toggle, options, minimap, loot, beute, roll <Item>, lootpanel [reset], debug")
         if ns.db.debug then
             ns.Print("Testbefehle: probe, fake, loottest, gargultest, vorlagetest [vorbei], lead, raider, auto")
         end

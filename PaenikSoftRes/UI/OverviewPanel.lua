@@ -9,7 +9,7 @@ local ROW_HEIGHT = 36
 local refreshList -- forward
 
 local header = UI.CreateText(panel, nil, nil, "GameFontNormal")
-header:SetWidth(560)
+header:SetWidth(470) -- rechts stehen die Knöpfe „Soft Reserves“ und „Verlauf“
 
 local emptyText = panel:CreateFontString(nil, "OVERLAY", "GameFontDisable")
 emptyText:SetPoint("CENTER", panel, "CENTER", 0, -20)
@@ -196,6 +196,10 @@ local modeButton = UI.CreateButton(panel, "Verlauf", 110, function(self)
     refreshList()
 end)
 modeButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, 4)
+
+-- Fenster „Beute“ (UI/LootPanel.lua): alle gelooteten Items mit Gewinnern
+local lootButton = UI.CreateButton(panel, "Beute", 100, function() ns.ToggleBeutePanel() end)
+lootButton:SetPoint("RIGHT", modeButton, "LEFT", -6, 0)
 
 function refreshList()
     local s = ns.Session:GetViewed()

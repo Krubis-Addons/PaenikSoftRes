@@ -328,7 +328,7 @@ end)
 local GLOBAL_BOX_WIDTH = 250
 
 local globalBox = CreateFrame("Frame", nil, panel)
-globalBox:SetSize(GLOBAL_BOX_WIDTH, 226)
+globalBox:SetSize(GLOBAL_BOX_WIDTH, 260)
 globalBox:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, -74)
 local globalBg = globalBox:CreateTexture(nil, "BACKGROUND")
 globalBg:SetAllPoints()
@@ -408,6 +408,13 @@ autoTradeCheck:SetScript("OnEnter", function(self)
     GameTooltip:Show()
 end)
 autoTradeCheck:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+-- Loot ab Qualität: welche Items in „Soft Reserves“ und „Beute“ erscheinen (aufsteigend)
+local qualityLabel = globalBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+qualityLabel:SetPoint("TOPLEFT", autoTradeCheck, "BOTTOMLEFT", 4, -10)
+qualityLabel:SetText("Loot ab:")
+local qualityDropdown = UI.CreateLootQualityDropdown(globalBox, 150)
+qualityDropdown:SetPoint("LEFT", qualityLabel, "RIGHT", 8, 0)
 
 -- Sitzungs- und Statustext enden links vom Kasten (sonst läuft ein langer Text darunter)
 for _, text in ipairs({ sessionText, lockText }) do

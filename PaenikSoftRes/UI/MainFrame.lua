@@ -115,6 +115,28 @@ function UI.CreateScrollList(parent, rowHeight, initializer)
     return scrollBox
 end
 
+-- Dropdown „Loot ab Qualität“ (Raidlead-Tab und Optionen), Qualitäten farbig
+function UI.CreateLootQualityDropdown(parent, width)
+    local dropdown = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
+    dropdown:SetWidth(width or 150)
+    dropdown:SetupMenu(function(_, root)
+        for _, quality in ipairs(ns.LOOT_QUALITIES) do
+            local color = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality.value]
+            local text = (color and color.hex or "") .. quality.text .. (color and color.hex and "|r" or "")
+            root:CreateRadio(text,
+                function(value) return ((ns.db and ns.db.lootMinQuality) or ns.LOOT_QUALITIES[1].value) == value end,
+                function(value)
+                    ns.db.lootMinQuality = value
+                    ns:Fire("LOOT_QUALITY_CHANGED")
+                end,
+                quality.value)
+        end
+    end)
+    ns:On("LOOT_QUALITY_CHANGED", function() dropdown:SignalUpdate() end)
+    dropdown:HookScript("OnShow", function(self) self:SignalUpdate() end)
+    return dropdown
+end
+
 -- Bossliste mit Porträts (Raider-Tab und Loot-Browser) ---------------------------------
 UI.BOSS_ROW_HEIGHT = 40
 UI.ALL_BOSSES = 0

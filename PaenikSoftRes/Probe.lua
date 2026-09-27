@@ -22,6 +22,9 @@ local GLOBALS = {
     "GetRaidRosterInfo",
     "IsInGroup",
     "IsInRaid",
+    "GetLootMethod",
+    "GetMasterLootCandidate",
+    "GiveMasterLoot",
     "GetTradePlayerItemLink",
 }
 

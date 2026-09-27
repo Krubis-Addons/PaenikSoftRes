@@ -46,8 +46,9 @@ local minimap = createCheckbox(showOnLogin, -4, "Minimap-Button anzeigen", nil,
     function() return not ns.db.minimap.hide end,
     function(value) ns.SetMinimapButtonShown(value) end)
 
-local lootPanel = createCheckbox(minimap, -4, "„Soft Reserves“-Fenster beim Looten anzeigen",
-    "Zeigt neben dem Lootfenster die Soft Reserves und Gewinner der Items.",
+local lootPanel = createCheckbox(minimap, -4, "„Soft Reserves“-Fenster beim Looten öffnen",
+    "Öffnet das Fenster mit Drops, Soft Reserves und Gewinnern, sobald du lootest – als Raider, sobald der "
+        .. "Raidlead lootet. Das Fenster zeigt die Items der letzten Leiche und bleibt offen, bis du es schließt (/psr loot öffnet es jederzeit, /psr beute alle gelooteten Items).",
     function() return ns.db.lootPanel end,
     function(value) ns.db.lootPanel = value end)
 
@@ -57,9 +58,16 @@ local resetLootPos = UI.CreateButton(panel, "Position zurücksetzen", 170, funct
 end)
 resetLootPos:SetPoint("LEFT", lootPanel.Text, "RIGHT", 16, 0)
 
+-- Loot ab Qualität: welche Items in „Soft Reserves“ und „Beute“ erscheinen (aufsteigend)
+local qualityLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+qualityLabel:SetPoint("TOPLEFT", lootPanel, "BOTTOMLEFT", 4, -18)
+qualityLabel:SetText("Loot ab Qualität:")
+local qualityDropdown = UI.CreateLootQualityDropdown(panel, 160)
+qualityDropdown:SetPoint("LEFT", qualityLabel, "RIGHT", 10, 0)
+
 -- Würfelzeit (Raidlead)
 local durationLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-durationLabel:SetPoint("TOPLEFT", lootPanel, "BOTTOMLEFT", 4, -18)
+durationLabel:SetPoint("TOPLEFT", qualityLabel, "BOTTOMLEFT", 0, -22)
 durationLabel:SetText("Würfelzeit (als Raidlead):")
 
 local durationDropdown = CreateFrame("DropdownButton", nil, panel, "WowStyle1DropdownTemplate")
