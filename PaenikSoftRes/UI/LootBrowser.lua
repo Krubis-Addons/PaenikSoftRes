@@ -94,7 +94,13 @@ local content = CreateFrame("Frame", nil, panel)
 content:SetPoint("TOPLEFT", bossList, "TOPRIGHT", 22, 0)
 content:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
 
+-- Loot-Filter (LootFilter.lua) rechts, Überschrift links daneben
+local filterDropdown = ns.LootFilter:CreateDropdown(content)
+filterDropdown:SetPoint("TOPRIGHT", content, "TOPRIGHT", -20, 6)
+
 local lootHeader = UI.CreateText(content, nil, nil, "GameFontNormal")
+lootHeader:SetPoint("RIGHT", filterDropdown, "LEFT", -8, 0)
+lootHeader:SetWordWrap(false)
 
 local function itemLink(itemID)
     local _, link = C_Item.GetItemInfo(itemID)
@@ -200,23 +206,29 @@ local function buildBossElements(encounters)
     return elements
 end
 
+-- Gibt auch die Anzahl vor dem Loot-Filter zurück (für „n von m Items“)
 local function buildItemElements(encounters)
-    local elements, seen = {}, {}
+    local elements, index, seen, total = {}, {}, {}, 0
     for bossIndex, encounter in ipairs(encounters) do
         if selectedBoss == ALL_BOSSES or selectedBoss == WISHLIST or selectedBoss == bossIndex then
             for _, itemID in ipairs(encounter.items) do
-                local existing = seen[itemID]
-                if existing then
-                    existing.boss = "mehrere Bosse"
+                if seen[itemID] then
+                    if index[itemID] then
+                        index[itemID].boss = "mehrere Bosse"
+                    end
                 elseif selectedBoss ~= WISHLIST or ns.Wishlist:Has(itemID) then
-                    local element = { itemID = itemID, boss = encounter.name }
-                    seen[itemID] = element
-                    table.insert(elements, element)
+                    seen[itemID] = true
+                    total = total + 1
+                    if ns.LootFilter:Matches(itemID) then
+                        local element = { itemID = itemID, boss = encounter.name }
+                        index[itemID] = element
+                        table.insert(elements, element)
+                    end
                 end
             end
         end
     end
-    return elements
+    return elements, total
 end
 
 local regenerateMenu = UI.Debounce(function()
@@ -244,18 +256,20 @@ function refresh()
     infoText:SetText(string.format("%s – %d Bosse, %d Items", instance.isRaid and "Raid" or "Dungeon",
         bosses, items))
 
+    local elements, total = buildItemElements(encounters)
+    local title
     if selectedBoss == WISHLIST then
-        lootHeader:SetText("Deine Wunschliste in " .. instance.name)
+        title = "Deine Wunschliste in " .. instance.name
     elseif selectedBoss == ALL_BOSSES then
-        lootHeader:SetText("Loot aller Bosse")
+        title = "Loot aller Bosse"
     else
-        lootHeader:SetText("Loot von " .. encounters[selectedBoss].name)
+        title = "Loot von " .. encounters[selectedBoss].name
     end
+    lootHeader:SetText(title .. ns.LootFilter:HeaderSuffix(#elements, total))
 
     bossList:SetDataProvider(CreateDataProvider(buildBossElements(encounters)),
         ScrollBoxConstants.RetainScrollPosition)
-    itemList:SetDataProvider(CreateDataProvider(buildItemElements(encounters)),
-        ScrollBoxConstants.RetainScrollPosition)
+    itemList:SetDataProvider(CreateDataProvider(elements), ScrollBoxConstants.RetainScrollPosition)
 end
 
 panel:HookScript("OnShow", refresh)
@@ -266,5 +280,6 @@ local refreshIfShown = UI.Debounce(function()
     end
 end)
 ns:On("WISHLIST_CHANGED", refreshIfShown)
+ns:On("LOOT_FILTER_CHANGED", refreshIfShown)
 ns:On("OWNED_CHANGED", refreshIfShown)
 ns:On("LOOT_ITEMS_CHANGED", refreshIfShown)

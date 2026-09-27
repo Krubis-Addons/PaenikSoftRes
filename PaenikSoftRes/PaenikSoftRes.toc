@@ -25,6 +25,7 @@ GargulCompat.lua
 Owned.lua
 Wishlist.lua
 Templates.lua
+LootFilter.lua
 Import.lua
 GuildSync.lua
 UI\MainFrame.lua

@@ -311,6 +311,7 @@ end
 -- Rechte Seite: Loot-Liste --------------------------------------------------
 
 local lootHeader = UI.CreateText(content, nil, nil, "GameFontNormal")
+lootHeader:SetWordWrap(false)
 
 -- Rechtsklick auf ein Item: Wunschliste (alle); Raidlead der eigenen Sitzung zusätzlich Hard Reserve
 -- Raidlead: Reserve für einen Spieler eintragen (Name = Gruppenschlüssel oder freie Eingabe)
@@ -493,6 +494,9 @@ end
 local itemList = UI.CreateScrollList(content, ROW_HEIGHT, initItemRow)
 itemList:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -20, 0)
 
+-- Loot-Filter (LootFilter.lua), rechts neben der Überschrift der Loot-Liste; Position setzt refreshList
+local filterDropdown = ns.LootFilter:CreateDropdown(content)
+
 -- Daten aufbauen -------------------------------------------------------------
 
 local function countOwn()
@@ -552,14 +556,20 @@ local function buildItemElements(s, mineCount)
     end
 
     local killedOnly = ns.Session:GetKilledOnlyItems(s)
-    local elements, index = {}, {}
+    -- total = Items vor dem Loot-Filter (für „n von m Items“)
+    local elements, index, seen, total = {}, {}, {}, 0
     for bossIndex, encounter in ipairs(ns.LootData:GetDisplayEncounters(s.instanceKey)) do
         if selectedBoss == ALL_BOSSES or selectedBoss == WISHLIST or selectedBoss == bossIndex then
             for _, itemID in ipairs(encounter.items) do
-                local existing = index[itemID]
-                if existing then
-                    existing.boss = "mehrere Bosse"
+                if seen[itemID] then
+                    if index[itemID] then
+                        index[itemID].boss = "mehrere Bosse"
+                    end
                 elseif selectedBoss ~= WISHLIST or ns.Wishlist:Has(itemID) then
+                    seen[itemID] = true
+                    total = total + 1
+                end
+                if seen[itemID] and not index[itemID] and ns.LootFilter:Matches(itemID) then
                     local element = {
                         itemID = itemID,
                         boss = encounter.name,
@@ -576,7 +586,7 @@ local function buildItemElements(s, mineCount)
             end
         end
     end
-    return elements
+    return elements, total
 end
 
 function refreshList()
@@ -617,24 +627,30 @@ function refreshList()
 
     -- „Meine Reserves“ bestimmt, wo die Loot-Liste beginnt
     local shownRows = refreshMyReserves(s, kind)
+    local headerY = -18 - shownRows * ROW_HEIGHT - 12
+    filterDropdown:ClearAllPoints()
+    filterDropdown:SetPoint("TOPRIGHT", content, "TOPRIGHT", -20, headerY + 6)
     lootHeader:ClearAllPoints()
-    lootHeader:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -18 - shownRows * ROW_HEIGHT - 12)
-    if selectedBoss == WISHLIST then
-        lootHeader:SetText("Deine Wunschliste |cff999999(Alt-Klick oder Rechtsklick auf ein Item zum Hinzufügen)|r")
-    elseif selectedBoss == ALL_BOSSES then
-        lootHeader:SetText("Loot aller Bosse")
-    else
-        lootHeader:SetText("Loot von " .. encounters[selectedBoss].name)
-    end
+    lootHeader:SetPoint("TOPLEFT", content, "TOPLEFT", 0, headerY)
+    lootHeader:SetPoint("RIGHT", filterDropdown, "LEFT", -8, 0)
     itemList:ClearAllPoints()
     itemList:SetPoint("TOPLEFT", lootHeader, "BOTTOMLEFT", 0, -6)
     itemList:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -20, 0)
 
     local mineCount = countOwn()
+    local items, total = buildItemElements(s, mineCount)
+    local title
+    if selectedBoss == WISHLIST then
+        title = "Deine Wunschliste |cff999999(Alt-Klick fügt hinzu)|r"
+    elseif selectedBoss == ALL_BOSSES then
+        title = "Loot aller Bosse"
+    else
+        title = "Loot von " .. encounters[selectedBoss].name
+    end
+    lootHeader:SetText(title .. ns.LootFilter:HeaderSuffix(#items, total))
     bossList:SetDataProvider(CreateDataProvider(buildBossElements(s, mineCount)),
         ScrollBoxConstants.RetainScrollPosition)
-    itemList:SetDataProvider(CreateDataProvider(buildItemElements(s, mineCount)),
-        ScrollBoxConstants.RetainScrollPosition)
+    itemList:SetDataProvider(CreateDataProvider(items), ScrollBoxConstants.RetainScrollPosition)
 end
 
 panel:HookScript("OnShow", function()
@@ -654,4 +670,5 @@ ns:On("SESSION_CHANGED", refreshIfShown)
 ns:On("LOOT_ITEMS_CHANGED", refreshIfShown)
 ns:On("OWNED_CHANGED", refreshIfShown)
 ns:On("WISHLIST_CHANGED", refreshIfShown)
+ns:On("LOOT_FILTER_CHANGED", refreshIfShown)
 ns:On("ROLE_CHANGED", refreshIfShown)
