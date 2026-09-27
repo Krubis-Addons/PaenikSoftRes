@@ -149,6 +149,61 @@ end)
 pastDropdown:SetScript("OnLeave", function() GameTooltip:Hide() end)
 table.insert(refreshers, function() pastDropdown:SignalUpdate() end)
 
+-- Gemeinsame Raidleiter: ab welchem Gildenrang (nur der Gildenmeister kann es ändern, GuildSync.lua)
+local rankLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+rankLabel:SetPoint("TOPLEFT", pastLabel, "BOTTOMLEFT", 0, -22)
+rankLabel:SetText("Raidleiter der Gilde:")
+
+local rankDropdown = CreateFrame("DropdownButton", nil, panel, "WowStyle1DropdownTemplate")
+rankDropdown:SetWidth(220)
+rankDropdown:SetPoint("LEFT", rankLabel, "RIGHT", 10, 0)
+rankDropdown:SetupMenu(function(_, root)
+    root:CreateRadio("Aus (jeder nur eigene Sitzungen)", function() return ns.GuildSync:GetRaidLeaderRank() == nil end,
+        function() ns.GuildSync:SetRaidLeaderRank(nil) end)
+    local names = ns.GuildSync:GetRankNames()
+    for index = 0, #names do
+        if names[index] then
+            root:CreateRadio("ab Rang „" .. names[index] .. "“",
+                function(value) return ns.GuildSync:GetRaidLeaderRank() == value end,
+                function(value) ns.GuildSync:SetRaidLeaderRank(value) end, index)
+        end
+    end
+end)
+rankDropdown:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Raidleiter der Gilde")
+    GameTooltip:AddLine("Alle Gildenmitglieder ab diesem Rang teilen sich die Berechtigung: Sie können jede für die "
+        .. "Gilde veröffentlichte Sitzung übernehmen, bearbeiten und leiten (die neueste Änderung gewinnt). "
+        .. "Nur der Gildenmeister kann das festlegen; die Einstellung wird in der Gilde verteilt.", 1, 1, 1, true)
+    GameTooltip:Show()
+end)
+rankDropdown:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+local rankHint = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+rankHint:SetPoint("TOPLEFT", rankLabel, "BOTTOMLEFT", 0, -10)
+
+local function refreshRank()
+    local inGuild = IsInGuild and IsInGuild()
+    local isMaster = ns.GuildSync:IsGuildMaster()
+    rankDropdown:SetEnabled(inGuild and isMaster)
+    rankDropdown:GenerateMenu()
+    if not inGuild then
+        rankHint:SetText("|cff999999Nicht in einer Gilde.|r")
+    elseif not isMaster then
+        rankHint:SetText("|cff999999Nur der Gildenmeister kann das ändern.|r"
+            .. (ns.GuildSync:IsRaidLeader(ns.FullName("player")) and "  |cff60ff60Du bist Raidleiter.|r" or ""))
+    else
+        rankHint:SetText("")
+    end
+end
+table.insert(refreshers, refreshRank)
+-- verzögert: die Änderung kann aus einer Menü-Antwort kommen (dort kein GenerateMenu)
+ns:On("GUILD_CONFIG_CHANGED", function()
+    C_Timer.After(0, function()
+        if panel:IsVisible() then refreshRank() end
+    end)
+end)
+
 -- Blizzard ruft OnRefresh beim Anzeigen der Seite auf
 function panel:OnRefresh()
     for _, refresh in ipairs(refreshers) do

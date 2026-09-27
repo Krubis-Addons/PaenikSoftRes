@@ -144,7 +144,8 @@ local function sendRules()
     local s = ns.Session:Get()
     local channel = groupChannel()
     if not s or not channel then return end
-    send(channel, nil, "R", s.id, s.leader, s.instanceKey or "", sanitize(s.instanceName),
+    -- Leiter-Feld = Absender: bei gemeinsamen Raidleitern kann s.leader ein anderer Raidleiter sein
+    send(channel, nil, "R", s.id, ns.FullName("player"), s.instanceKey or "", sanitize(s.instanceName),
         s.maxReserves, s.allowDuplicates and 1 or 0, s.locked and 1 or 0, s.deadline or 0, sanitize(s.name),
         ns.Session:KilledToString(s))
 end

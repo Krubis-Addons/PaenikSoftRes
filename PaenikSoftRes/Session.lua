@@ -48,6 +48,8 @@ end
 -- Eigene Sitzung wurde geändert: Version erhöhen (für die Gilden-Synchronisation, GuildSync.lua)
 function Session:Touch(s)
     if not s then return end
+    -- Wer ändert, ist aktueller Leiter (gemeinsame Raidleiter: Anmeldungen gehen an den zuletzt Ändernden)
+    s.leader = ns.FullName("player") or s.leader
     s.version = (s.version or 0) + 1
     s.updatedAt = GetServerTime()
     ns:Fire("OWN_SESSION_CHANGED", s)
@@ -106,7 +108,9 @@ function Session:ListViewable()
     local myKey = ns.FullName("player")
     local guildSessions = (ns.db and ns.db.guildSync ~= false) and ns.char.guildSessions or {}
     for id, s in pairs(guildSessions) do
-        if id ~= groupID and s.leader ~= myKey and not s.deleted then
+        -- Kopien von Sitzungen, die ich selbst halte (übernommen), stehen schon unter den eigenen
+        local held = ns.char.sessions and ns.char.sessions[id]
+        if id ~= groupID and s.leader ~= myKey and not held and not s.deleted then
             table.insert(guild, s)
         end
     end
@@ -134,7 +138,7 @@ function Session:GetViewed()
             return own, "own"
         end
         local copy = ns.db.guildSync ~= false and ns.char.guildSessions and ns.char.guildSessions[wanted]
-        if copy and not copy.deleted and copy.leader ~= ns.FullName("player") then
+        if copy and not copy.deleted and copy.leader ~= ns.FullName("player") and not own then
             return copy, "guild"
         end
     end
@@ -155,10 +159,15 @@ function Session:GetActiveID()
     return ns.char and ns.char.activeSessionId
 end
 
--- true, wenn die aktuelle Sitzung von diesem Spieler angelegt wurde (Master-Liste).
+-- true, wenn s zu den eigenen Sitzungen gehört (selbst angelegt oder als Raidleiter übernommen, GuildSync).
+-- Nicht über s.leader: bei gemeinsamen Raidleitern ist leader der zuletzt Ändernde.
+function Session:IsOwnSession(s)
+    return s ~= nil and ns.char ~= nil and ns.char.sessions ~= nil and ns.char.sessions[s.id] == s
+end
+
+-- true, wenn die aktuelle Sitzung eine eigene ist (Master-Liste).
 function Session:IsOwner()
-    local s = self:Get()
-    return s ~= nil and s.leader == ns.FullName("player")
+    return self:IsOwnSession(self:Get())
 end
 
 -- true, wenn diese Sitzung die maßgebliche Master-Liste ist: eigene Sitzung und Raidlead.
@@ -337,7 +346,7 @@ end
 
 -- Gelegte Bosse (Index in LootData:GetEncounters) markieren; nur eigene Sitzungen
 function Session:SetBossKilled(s, index, killed)
-    if not s or s.leader ~= ns.FullName("player") or type(index) ~= "number" or index < 1 then return false end
+    if not Session:IsOwnSession(s) or type(index) ~= "number" or index < 1 then return false end
     s.killed = s.killed or {}
     s.killed[index] = killed and true or nil
     changed("Boss gelegt", index, killed)
@@ -402,7 +411,7 @@ end
 -- Wie SetRules: ein Instanzwechsel verwirft die Reserves (die UI fragt vorher nach); die aktive Sitzung
 -- wird an die Gruppe verteilt. Ein bereits verstrichener Anmeldeschluss wird nicht neu gesetzt.
 function Session:ApplyTemplate(s, t, raidAt)
-    if not s or s.leader ~= ns.FullName("player") then return false end
+    if not Session:IsOwnSession(s) then return false end
     local rules = {
         instanceKey = t.instanceKey,
         instanceName = t.instanceName,
@@ -457,7 +466,7 @@ local function onDeadline(s)
     if not s.deadline or GetServerTime() < s.deadline then return end
     -- Die Sitzung wird NICHT hart gesperrt: der Anmeldeschluss sperrt über IsLocked() ohnehin, und
     -- rechtzeitig abgegebene Gilden-Anmeldungen (signedAt) müssen auch danach noch angenommen werden.
-    if s.leader == ns.FullName("player") and ownSessions()[s.id] and not s.locked then
+    if Session:IsOwnSession(s) and not s.locked then
         if s == ownActive() and Session:IsMaster() then
             ns.Print("Anmeldeschluss erreicht – die Soft Reserves sind geschlossen.")
             if ns.GroupChannel() then
@@ -649,7 +658,7 @@ end
 
 -- Hard Reserve setzen; vorhandene Soft Reserves auf dem Item werden entfernt
 function Session:SetHardReserve(s, itemID, note)
-    if not s or s.leader ~= ns.FullName("player") or type(itemID) ~= "number" then return false end
+    if not Session:IsOwnSession(s) or type(itemID) ~= "number" then return false end
     note = strtrim((note or ""):gsub("[%^;=,|]", "") or ""):sub(1, MAX_NOTE_LENGTH)
     for player, list in pairs(s.reserves) do
         local removed = false
@@ -675,7 +684,7 @@ function Session:SetHardReserve(s, itemID, note)
 end
 
 function Session:RemoveHardReserve(s, itemID)
-    if not s or s.leader ~= ns.FullName("player") or not (s.hardReserves and s.hardReserves[itemID]) then
+    if not Session:IsOwnSession(s) or not (s.hardReserves and s.hardReserves[itemID]) then
         return false
     end
     s.hardReserves[itemID] = nil
@@ -784,7 +793,7 @@ end
 -- s (optional, Standard: aktuelle Sitzung), signedAt (optional, Anmeldung über die Gilde).
 function Session:SetPlayerReserves(player, itemIDs, source, s, signedAt)
     s = s or self:Get()
-    if not s or s.leader ~= ns.FullName("player") then return false, "Nicht Besitzer der Sitzung" end
+    if not Session:IsOwnSession(s) then return false, "Nicht Besitzer der Sitzung" end
     local ok, err = self:ValidateReserves(itemIDs, player, s, signedAt)
     if not ok then
         ns.Debug("Session", "Reserves abgelehnt", player, err)
@@ -817,7 +826,7 @@ end
 -- Reserves und doppelte Items werden geprüft. Über dem Limit: false, "limit", außer mit force.
 -- importName (optional): eingegebener Name, solange der Spieler keinem Gruppenmitglied zugeordnet ist.
 function Session:AddLeadReserve(s, player, itemID, importName, force)
-    if not s or s.leader ~= ns.FullName("player") then return false, "Nicht Besitzer der Sitzung" end
+    if not Session:IsOwnSession(s) then return false, "Nicht Besitzer der Sitzung" end
     if not s.instanceKey then return false, "Keine Instanz gewählt" end
     local itemSet = self:GetInstanceItemSet(s) or {}
     if not itemSet[itemID] then return false, "Item gehört nicht zur Instanz" end
@@ -849,7 +858,7 @@ end
 
 -- Raidlead entfernt eine Reserve (ein Vorkommen des Items) eines Spielers aus seiner Sitzung.
 function Session:RemovePlayerReserve(s, player, itemID)
-    if not s or s.leader ~= ns.FullName("player") then return false end
+    if not Session:IsOwnSession(s) then return false end
     local list = s.reserves[player]
     if not list then return false end
     for i = #list, 1, -1 do

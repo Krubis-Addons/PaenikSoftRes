@@ -21,7 +21,7 @@ local function onRowEnter(row)
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
     GameTooltip:SetItemByID(row.itemID)
     local s = ns.Session:GetViewed()
-    if row.names and s and s.leader == ns.FullName("player") then
+    if row.names and ns.Session:IsOwnSession(s) then
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Rechtsklick: Reserve eines Spielers entfernen", 0.6, 0.8, 1)
     end
@@ -36,7 +36,7 @@ end
 local function onRowClick(row, mouseButton)
     if mouseButton ~= "RightButton" or not row.itemID or not row.names then return end
     local s = ns.Session:GetViewed()
-    if not s or s.leader ~= ns.FullName("player") then return end
+    if not ns.Session:IsOwnSession(s) then return end
     local itemID = row.itemID
     local players = {}
     for player in pairs(row.names) do

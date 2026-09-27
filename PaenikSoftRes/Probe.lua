@@ -26,6 +26,9 @@ local GLOBALS = {
     "GetMasterLootCandidate",
     "GiveMasterLoot",
     "GetTradePlayerItemLink",
+    "GetGuildInfo",
+    "GuildControlGetNumRanks",
+    "GuildControlGetRankName",
 }
 
 local function probeEJ()

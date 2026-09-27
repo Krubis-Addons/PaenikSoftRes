@@ -19,6 +19,7 @@
 --                                 weitergereicht, sobald er online ist (auch ohne den Raider)
 --   GC^sid^Spieler^signedAt^Status^Text (Gilde, vom Raidlead) Ergebnis: a = angenommen,
 --                                 o = überholt, x = abgelehnt; Mitglieder verwerfen die Weitergabe
+--   GK^rank^version^setBy          (Gilde) Raidleiter ab Gildenrang (nur vom Gildenmeister, weitergegeben)
 -- Weitergegebene Anmeldungen werden bewusst ohne Echtheitsprüfung übernommen (Entscheidung des Nutzers).
 local _, ns = ...
 
@@ -86,6 +87,7 @@ end
 -- Vor jedem Whisper prüfen: an Offline-Spieler erzeugt WoW eine sichtbare Fehlermeldung.
 local rosterStatus = {} -- [Name-Realm] = true (online) / false (offline oder nur mobil)
 local lastSeen = {}     -- [Name-Realm] = GetTime() der letzten Addon-Nachricht (Fallback ohne Roster)
+local rosterRank = {}   -- [Name-Realm] = Gildenrang-Index (0 = Gildenmeister)
 
 local function keyFromGUID(guid)
     if ns.IsSecret(guid) or not guid then return nil end
@@ -98,8 +100,9 @@ end
 local function refreshRoster()
     if not (GetNumGuildMembers and GetGuildRosterInfo) then return end
     wipe(rosterStatus)
+    wipe(rosterRank)
     for i = 1, GetNumGuildMembers() do
-        local name, _, _, _, _, _, _, _, isOnline, _, _, _, _, isMobile, _, _, guid = GetGuildRosterInfo(i)
+        local name, _, rankIndex, _, _, _, _, _, isOnline, _, _, _, _, isMobile, _, _, guid = GetGuildRosterInfo(i)
         if not ns.IsSecret(isOnline) and not ns.IsSecret(isMobile) then
             local key = keyFromGUID(guid)
             if not key and not ns.IsSecret(name) and name then
@@ -107,6 +110,9 @@ local function refreshRoster()
             end
             if key then
                 rosterStatus[key] = (isOnline and not isMobile) and true or false
+                if not ns.IsSecret(rankIndex) then
+                    rosterRank[key] = rankIndex
+                end
             end
         end
     end
@@ -118,6 +124,163 @@ function GuildSync:IsOnline(player)
         return status -- der Roster weiß es: auch „offline“ gilt, egal wann zuletzt eine Nachricht kam
     end
     return lastSeen[player] ~= nil and GetTime() - lastSeen[player] < SEEN_ONLINE_WINDOW
+end
+
+-- Gemeinsame Raidleiter ------------------------------------------------------------------
+-- Der Gildenmeister legt fest, ab welchem Gildenrang man Raidleiter ist (ns.char.guildConfig =
+-- { rank, version, setBy }, rank = höchster erlaubter Rang-Index, -1 = aus). Verteilt als
+--   GK^rank^version^setBy        (Gilde; nur vom Gildenmeister gesetzt, von allen weitergegeben)
+-- Raidleiter dürfen alle veröffentlichten Gildensitzungen übernehmen (GuildSync:Adopt), bearbeiten und
+-- leiten. Wer ändert, verteilt eine neue Version (Session:Touch setzt leader = Ändernder); andere Raidleiter,
+-- die dieselbe Sitzung halten, übernehmen neuere Versionen (syncOwnFromCopy). Die neueste Änderung gewinnt.
+
+local function guildConfig()
+    return ns.char and ns.char.guildConfig
+end
+
+local function myRankIndex()
+    if not GetGuildInfo then return nil end
+    local _, _, rankIndex = GetGuildInfo("player")
+    if ns.IsSecret(rankIndex) then return nil end
+    return rankIndex
+end
+
+function GuildSync:IsGuildMaster()
+    return myRankIndex() == 0
+end
+
+-- Höchster Rang-Index, der als Raidleiter gilt; nil = aus (nur der Ersteller bearbeitet seine Sitzungen)
+function GuildSync:GetRaidLeaderRank()
+    local cfg = guildConfig()
+    if not cfg or (cfg.rank or -1) < 0 then return nil end
+    return cfg.rank
+end
+
+function GuildSync:IsRaidLeader(player)
+    local maxRank = self:GetRaidLeaderRank()
+    if not maxRank or not player then return false end
+    local rank = rosterRank[player]
+    if rank == nil and player == me() then
+        rank = myRankIndex()
+    end
+    return rank ~= nil and rank <= maxRank
+end
+
+-- Rang-Namen der Gilde (Index 0 = Gildenmeister) für die Einstellung
+function GuildSync:GetRankNames()
+    local names = {}
+    if not (GuildControlGetNumRanks and GuildControlGetRankName) then return names end
+    for i = 1, GuildControlGetNumRanks() do
+        local name = GuildControlGetRankName(i)
+        names[i - 1] = (not ns.IsSecret(name) and name) or ("Rang " .. i)
+    end
+    return names
+end
+
+local heardConfig = 0 -- GetTime() der zuletzt gehörten Einstellung (Weitergabe nicht doppelt senden)
+
+local function sendConfig(cfg)
+    Comm:SendGuild("GK", cfg.rank, cfg.version, cfg.setBy)
+    heardConfig = GetTime()
+end
+
+-- Nur der Gildenmeister; rank = höchster Rang-Index oder nil (aus)
+function GuildSync:SetRaidLeaderRank(rank)
+    if not self:IsGuildMaster() then return false end
+    local cfg = { rank = rank or -1, version = GetServerTime(), setBy = me() }
+    ns.char.guildConfig = cfg
+    if enabled() then
+        sendConfig(cfg)
+    end
+    ns.Debug("Guild", "Raidleiter ab Rang", cfg.rank)
+    ns:Fire("GUILD_CONFIG_CHANGED")
+    return true
+end
+
+Comm:RegisterHandler("GK", function(sender, f)
+    if not enabled() then return end
+    local rank, version, setBy = tonumber(f[3]), tonumber(f[4]) or 0, f[5]
+    if not rank or not setBy then return end
+    heardConfig = GetTime()
+    local cfg = guildConfig()
+    if cfg and (cfg.version or 0) >= version then return end
+    -- nur Einstellungen des Gildenmeisters (laut Gildenroster) übernehmen
+    if rosterRank[setBy] ~= 0 then
+        ns.Debug("Guild", "GK ignoriert, nicht vom Gildenmeister:", setBy, "via", sender)
+        return
+    end
+    ns.char.guildConfig = { rank = rank, version = version, setBy = setBy }
+    ns.Debug("Guild", "Raidleiter ab Rang", rank, "von", setBy)
+    ns:Fire("GUILD_CONFIG_CHANGED")
+    ns:Fire("SESSION_CHANGED")
+end)
+
+-- Neuere Version einer Sitzung, die ich selbst halte, von einem anderen Raidleiter übernehmen
+-- (Regeln, Reserves, Hard Reserves, gelegte Bosse; Verlauf und Beute bleiben lokal)
+local function syncOwnFromCopy(sid)
+    local copy, own = copies()[sid], ownSession(sid)
+    if not copy or not own or copy.deleted or not copy.complete then return end
+    if (copy.version or 0) <= (own.version or 0) or copy.leader == me() then return end
+    if not GuildSync:IsRaidLeader(copy.leader) then
+        ns.Debug("Guild", "Fremde Änderung ignoriert, kein Raidleiter:", copy.leader, sid)
+        return
+    end
+    for _, key in ipairs({ "instanceKey", "instanceName", "maxReserves", "allowDuplicates", "locked", "deadline",
+        "name", "leader", "version", "updatedAt" }) do
+        own[key] = copy[key]
+    end
+    own.nameAuto = false
+    own.published = true
+    own.killed = copy.killed and CopyTable(copy.killed) or nil
+    own.hardReserves = copy.hardReserves and CopyTable(copy.hardReserves) or nil
+    own.reserves = CopyTable(copy.reserves or {})
+    ns.Print(string.format("Sitzung „%s“ wurde von %s geändert und übernommen.", own.name or sid,
+        ns.UI.ShortName(copy.leader)))
+    ns:Fire("SESSION_CHANGED")
+    if ns.char.activeSessionId == sid then
+        ns:Fire("SESSION_FULL_SYNC") -- führe ich damit gerade die Gruppe, bekommt sie den neuen Stand
+    end
+end
+
+-- Gildensitzung eines anderen Raidleiters übernehmen: wird eigene (aktive) Sitzung, bearbeitbar und leitbar
+function GuildSync:Adopt(sid)
+    if not self:IsRaidLeader(me()) then return false, "Du bist kein Raidleiter der Gilde" end
+    local copy = copies()[sid]
+    if not copy or copy.deleted or not copy.complete then return false, "Sitzung noch nicht vollständig empfangen" end
+    if not ownSession(sid) then
+        local s = {
+            id = sid,
+            createdAt = GetServerTime(),
+            nameAuto = false,
+            published = true,
+            reserves = CopyTable(copy.reserves or {}),
+            hardReserves = copy.hardReserves and CopyTable(copy.hardReserves) or nil,
+            killed = copy.killed and CopyTable(copy.killed) or nil,
+        }
+        for _, key in ipairs({ "instanceKey", "instanceName", "maxReserves", "allowDuplicates", "locked",
+            "deadline", "name", "leader", "version", "updatedAt" }) do
+            s[key] = copy[key]
+        end
+        ns.char.sessions = ns.char.sessions or {}
+        ns.char.sessions[sid] = s
+        ns.Debug("Guild", "Sitzung übernommen", sid, "von", copy.leader)
+    end
+    ns.Session:SetActive(sid)
+    ns:Fire("SESSION_CHANGED")
+    return true
+end
+
+-- Veröffentlichte Gildensitzungen anderer Raidleiter, die ich übernehmen kann
+function GuildSync:ListAdoptable()
+    local list = {}
+    if not enabled() or not self:IsRaidLeader(me()) then return list end
+    for sid, copy in pairs(copies()) do
+        if not copy.deleted and copy.complete and copy.leader ~= me() and not ownSession(sid) then
+            table.insert(list, copy)
+        end
+    end
+    table.sort(list, function(a, b) return (a.deadline or math.huge) < (b.deadline or math.huge) end)
+    return list
 end
 
 -- Verteilen einer Sitzung (eigene oder vollständige Kopie) --------------------------------
@@ -208,7 +371,7 @@ local function schedulePublish(s, delay)
 end
 
 function GuildSync:SetPublished(s, published)
-    if not s or s.leader ~= me() then return end
+    if not ns.Session:IsOwnSession(s) then return end
     s.published = published and true or false
     ns.Session:Touch(s) -- neue Version: wird verteilt bzw. dient als Version der Löschmarke
     if not s.published and enabled() then
@@ -268,7 +431,7 @@ end
 -- Art der Sitzung aus Sicht des Spielers: "own", "group" oder "guild"
 function Signup:Kind(s)
     if not s then return nil end
-    if s.leader == me() then return "own" end
+    if ns.Session:IsOwnSession(s) then return "own" end
     if s == ns.Session:GetRemote() and s == ns.Session:Get() then return "group" end
     return "guild"
 end
@@ -400,6 +563,9 @@ Comm:RegisterHandler("GF", function(sender, f)
     copy.expected = tonumber(f[5]) or 0
     copy.received = 0
     copy.complete = copy.expected == 0
+    if copy.complete then
+        syncOwnFromCopy(f[3])
+    end
 end)
 
 Comm:RegisterHandler("GP", function(sender, f)
@@ -421,6 +587,9 @@ Comm:RegisterHandler("GP", function(sender, f)
     end
     copy.received = (copy.received or 0) + 1
     copy.complete = copy.received >= copy.expected
+    if copy.complete then
+        syncOwnFromCopy(f[3])
+    end
     ns:Fire("SESSION_CHANGED")
 end)
 
@@ -443,6 +612,15 @@ end)
 Comm:RegisterHandler("GQ", function(sender)
     if not enabled() then return end
     markSeen(sender)
+    -- Raidleiter-Einstellung weitergeben (zufällig verzögert, nur wenn sie nicht gerade jemand gesendet hat)
+    local cfg = guildConfig()
+    if cfg then
+        C_Timer.After(REPLY_DELAY_MIN + math.random() * (REPLY_DELAY_MAX - REPLY_DELAY_MIN), function()
+            if GetTime() - heardConfig > SUPPRESS_WINDOW then
+                sendConfig(cfg)
+            end
+        end)
+    end
     -- eigene veröffentlichte Sitzungen (gedrosselt, falls viele Mitglieder kurz hintereinander einloggen)
     for _, s in pairs(ns.char.sessions or {}) do
         if s.published and not (lastPublished[s.id] and GetTime() - lastPublished[s.id] < REPUBLISH_MIN) then

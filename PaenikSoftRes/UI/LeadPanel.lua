@@ -70,7 +70,26 @@ sessionDropdown:SetupMenu(function(_, root)
             pastMenu:CreateRadio(past[i].text, isSessionSelected, selectSession, past[i].id)
         end
     end
-    if #sessions > 0 then
+    -- Gemeinsame Raidleiter: veröffentlichte Gildensitzungen anderer Raidleiter übernehmen (GuildSync.lua)
+    local adoptable = ns.GuildSync:ListAdoptable()
+    if #adoptable > 0 then
+        local guildMenu = root:CreateButton("Gildensitzung übernehmen (" .. #adoptable .. ")")
+        for _, copy in ipairs(adoptable) do
+            local text = (copy.name or copy.instanceName or "?") .. " |cff999999(" .. UI.ShortName(copy.leader or "?")
+                .. ")|r"
+            guildMenu:CreateButton(text, function()
+                UI.Confirm(string.format("Sitzung „%s“ von %s übernehmen?\nDu kannst sie dann bearbeiten und leiten; "
+                    .. "Änderungen gehen an alle Raidleiter.", copy.name or "?", UI.ShortName(copy.leader or "?")),
+                    function()
+                        local ok, err = ns.GuildSync:Adopt(copy.id)
+                        if not ok then
+                            ns.Print("Nicht übernommen: " .. (err or "?"))
+                        end
+                    end)
+            end)
+        end
+    end
+    if #sessions > 0 or #adoptable > 0 then
         root:CreateDivider()
     end
     root:CreateButton("Neue Sitzung anlegen", newSession)
@@ -503,8 +522,11 @@ local function refresh()
         reserveCount = reserveCount + #list
     end
     local count = #ns.Session:List()
-    sessionText:SetText(string.format("%d Reserves%s – diese Sitzung ist aktiv und wird an die Gruppe verteilt",
-        reserveCount, count > 1 and (" (" .. count .. " Sitzungen insgesamt)") or ""))
+    -- Gemeinsame Raidleiter: zuletzt von jemand anderem geändert?
+    local editedBy = s.leader and s.leader ~= ns.FullName("player")
+        and ("  |cff999999(zuletzt geändert von " .. UI.ShortName(s.leader) .. ")|r") or ""
+    sessionText:SetText(string.format("%d Reserves%s – diese Sitzung ist aktiv und wird an die Gruppe verteilt%s",
+        reserveCount, count > 1 and (" (" .. count .. " Sitzungen insgesamt)") or "", editedBy))
 
     if s.instanceKey then
         local bosses, items = ns.LootData:GetStats(s.instanceKey)

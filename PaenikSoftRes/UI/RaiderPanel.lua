@@ -165,7 +165,7 @@ end
 -- Raidlead: Rechtsklick auf einen Boss der eigenen Sitzung markiert ihn als gelegt (ID fortführen)
 local function showBossMenu(row)
     local s = ns.Session:GetViewed()
-    if not s or s.leader ~= ns.FullName("player") or not row.bossIndex or row.bossIndex < 1 then return end
+    if not ns.Session:IsOwnSession(s) or not row.bossIndex or row.bossIndex < 1 then return end
     local index = row.bossIndex
     MenuUtil.CreateContextMenu(row, function(_, root)
         root:CreateTitle(row.name:GetText() or "")
@@ -343,7 +343,7 @@ local function showItemMenu(row)
     local s = ns.Session:GetViewed()
     if not s then return end
     local itemID = row.itemID
-    local isOwner = s.leader == ns.FullName("player")
+    local isOwner = ns.Session:IsOwnSession(s)
     local hr = ns.Session:GetHardReserve(itemID, s)
     MenuUtil.CreateContextMenu(row, function(_, root)
         root:CreateTitle(UI.StripColors(select(1, UI.GetItemDisplay(itemID)) or ""))
