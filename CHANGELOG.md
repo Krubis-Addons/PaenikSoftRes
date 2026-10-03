@@ -5,6 +5,14 @@ Alle nennenswerten Änderungen an PÄNIK SoftRes. Versionen nach [Semantic Versi
 
 ## [Unreleased]
 
+### Neu
+- MoP Classic als Testumgebung (Interface 50504), Testraid Mogu'shan-Gewölbe (Normal/Heroisch).
+- Befehl `/psr version`.
+
+### Behoben
+- Reiter des Hauptfensters in MoP Classic (die Classic-Fassung der Blizzard-Reiterfunktionen brauchte globale Namen).
+- Lootqualität in MoP Classic (andere Enum-Schlüssel).
+
 ## [0.9.0] – 2026-10-03
 
 Erste versionierte Fassung (Stand nach 29 Entwicklungsschritten).

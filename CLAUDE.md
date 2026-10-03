@@ -9,7 +9,7 @@ Es soll Möglichkeiten geschaffen werden externe Quellen anzubinden um einen Üb
 
 ## Projektdetails
 - Addon-Code: `PaenikSoftRes/` (per Junction im Spiel verlinkt)
-- Zielversion: WoW: Forever (Interface 16001) – bei Bedarf anpassen
+- Zielversionen: WoW: Forever (Interface 16001) und zum Testen MoP Classic (50504, u. a. Solo-Raid mit Plündermeister) – beide in einer `.toc` (`## Interface: 16001, 50504`). Junction auch in `_classic_\Interface\AddOns`; SavedVariables von MoP Classic liegen unter `_classic_\WTF\Account\FROZENFREAK\SavedVariables`.
 - SavedVariables: `PaenikSoftResDB` (Account: Einstellungen, Wunschliste, Bank-Speicher; `ns.db`), `PaenikSoftResCharDB` (pro Charakter: Sitzungen, Spiegel, Anmeldungen, Gildenkopien; `ns.char`), `PaenikSoftResDebugLog` (Debug-Log)
 - Slash-Befehl: `/paeniksoftres`, Kurzform `/psr`
 
@@ -28,8 +28,11 @@ Es gibt ein Oberfläche beim Looten mit den Soft Reserve Informationen pro Item.
 ## Arbeitsweise (Git, Versionen, Releases)
 - **Nie direkt auf `main` arbeiten.** `main` = getesteter, releasefähiger Stand. Jede Funktion bzw. jeder Fix auf
   einem eigenen Branch von `main`: `feature/<name>`, `fix/<name>`, `chore/<name>` (GitHub Flow).
-- Nach dem Ingame-Test des Nutzers: Branch pushen und per Pull Request in `main` zusammenführen (bis `gh` installiert
-  ist, legt der Nutzer den PR im Browser an), danach Branch löschen. Ungetestetes bleibt auf dem Branch.
+- Nach dem Ingame-Test des Nutzers: Branch pushen. **Pull Requests legt der Nutzer selbst an und führt sie zusammen**
+  – nicht selbst anlegen oder mergen. Danach lokalen Branch löschen und `main` aktualisieren. Ungetestetes bleibt auf
+  dem Branch. GitHub CLI (`gh`, angemeldet als Krubis-Addons) nur zum Lesen nutzen (Action-Läufe, Releases); falls
+  nicht im PATH: `"/c/Program Files/GitHub CLI/gh.exe"`.
+- Vor einem PR `main` in den Branch mergen, damit der PR konfliktfrei ist.
 - Das Spiel lädt über die Junction immer den **ausgecheckten Branch** – vor Tests den richtigen Branch auschecken
   und dem Nutzer sagen, welcher aktiv ist.
 - Versionen nach SemVer, Start 0.9.0 (0.x = Beta). In der `.toc` bleibt `## Version: @project-version@`;
@@ -65,7 +68,7 @@ Es gibt ein Oberfläche beim Looten mit den Soft Reserve Informationen pro Item.
 - Loot-Filter (`LootFilter.lua`): Dropdown mit Mehrfachauswahl (Typ, Slot, „Für meine Klasse“ nach Classic-Waffenfertigkeiten) über der Loot-Liste in Raider-Tab und Loot-Browser, gemeinsamer Stand pro Charakter in `char.lootFilter`, Ereignis `LOOT_FILTER_CHANGED`. Klassifizierung über `C_Item.GetItemInfoInstant` (equipLoc, classID/subClassID); unbekannte Items werden nie ausgefiltert.
 - Loot-Browser (`UI/LootBrowser.lua`, Reiter „Loot“, `UI.TAB_LOOT`): alle Instanzen aus `LootData:GetInstances`, unabhängig von Sitzungen; Klick = Wunschliste, Shift/Strg-Klick über `HandleModifiedItemClick`. Gewählte Instanz in `db.browserInstance`. Boss-Zeilen mit Porträt teilen sich Raider-Tab und Browser über `UI.InitBossRow` (MainFrame.lua).
 - Gargul-Kompatibilität (`GargulCompat.lua`, Protokoll im Dateikopf): `Rolls:Start` sendet zusätzlich eine Gargul-Startnachricht (Präfix `GargulComm2`, AceComm-Stückelung von Hand über `Comm:SendRaw`), damit Raider nur mit Gargul dessen Würfelfenster bekommen; Knöpfe mit unseren Bereichen (100/50/25), die Würfe wertet Rolls.lua wie jeden /roll aus. Nicht gesendet, wenn Gargul beim Raidlead selbst geladen ist. Option `db.gargulCompat`, Selbsttest `/paeniksoftres gargultest`.
-- Testdaten: `Data/Instances/ForeverDungeons.lua` (7 Forever-Beta-Dungeons, aus ForeverDungeonJournal v1.1 bzw. dessen SOURCES.txt).
+- Testdaten: `Data/Instances/ForeverDungeons.lua` (7 Forever-Beta-Dungeons, aus ForeverDungeonJournal v1.1 bzw. dessen SOURCES.txt). MoP-Testraid: `Data/Instances/MogushanVaults.lua` (Normal `static:msv` und Heroisch `static:msvh`, ItemIDs per Skript aus AtlasLootClassic `data-mop.lua`), Bosse mit `ejEncounterID` – Porträt und lokalisierter Name zur Laufzeit aus dem Dungeonkompendium (`LootData` `resolveFromJournal`). In MoP Classic ist das Kompendium aktiv, der EJ-Provider liefert dort zusätzlich Instanzen (ungetestet).
 - Anmeldeschluss: `session.deadline` (Zeitstempel, `GetServerTime`/`time()`). `Session:IsLocked()` = manuell gesperrt ODER Schluss erreicht – immer statt `s.locked` prüfen. Beim Raidlead sperrt ein Timer die Sitzung zum Schluss und sagt es an; „Öffnen“ danach entfernt den Schluss. Übertragen als 10. Feld der `R`-Nachricht.
 - Gilden-Synchronisation (`GuildSync.lua`, Protokoll im Dateikopf, Kanal GUILD, unsichtbar): veröffentlichte eigene Sitzungen (`session.published`, `version` via `Session:Touch`) werden als Kopien in `db.guildSessions` gehalten und von allen Mitgliedern weitergegeben; Löschmarken (`deleted`) verhindern Wiederkehr. Anmeldungen der Raider in `db.signups` (pending/confirmed/rejected), Bestätigung per `GA`. Gezielte Nachrichten laufen nie als WHISPER, sondern als `1^@^Empfänger^…` über Gruppe bzw. Gilde (`Comm:SendWhisper`, Whisper-Ziele mit Nachnamen kamen nicht an); die Online-Prüfung über den Gildenroster bleibt als Vorfilter. Raider-Tab/Übersicht nutzen `Session:GetViewed()` und `ns.Signup` (own/group/guild).
 - Gemeinsame Raidleiter (GuildSync.lua, Abschnitt „Gemeinsame Raidleiter“): Der Gildenmeister legt in den Optionen fest, ab welchem Gildenrang man Raidleiter ist (`char.guildConfig`, Nachricht `GK`, nur vom Gildenmeister laut Roster angenommen). Raidleiter übernehmen veröffentlichte Gildensitzungen anderer (`GuildSync:Adopt`, Sitzungs-Dropdown „Gildensitzung übernehmen“) und bearbeiten/leiten sie wie eigene. Besitz = „liegt in `char.sessions`“ (`Session:IsOwnSession`), nicht `s.leader`; `Session:Touch` setzt `leader` auf den Ändernden (Anmeldungen gehen an ihn). Neuere Versionen anderer Raidleiter für gehaltene Sitzungen übernimmt `syncOwnFromCopy` (Verlauf/Beute bleiben lokal); die neueste Änderung gewinnt. `R` trägt als Leiter immer den Absender.

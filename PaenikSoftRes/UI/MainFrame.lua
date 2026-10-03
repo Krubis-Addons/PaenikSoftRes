@@ -404,8 +404,26 @@ function UI.StripColors(text)
 end
 
 -- Tabs
+-- Eigene Umsetzung statt PanelTemplates_*: deren Classic-Fassung (MoP Classic) braucht globale Frame-Namen
+-- (tab:GetName() .. "Left"), und globale Namen legen wir nicht an. Die Vorlage PanelTabButtonTemplate
+-- bringt in beiden Clients die Texturen Left/Middle/Right und *Active als Schlüssel mit.
+local tabs = {}
+local TAB_TEXTURES = { "Left", "Middle", "Right" }
+
+local function styleTab(tab, selected)
+    for _, key in ipairs(TAB_TEXTURES) do
+        if tab[key] then tab[key]:SetShown(not selected) end
+        if tab[key .. "Active"] then tab[key .. "Active"]:SetShown(selected) end
+    end
+    tab:SetEnabled(tab.allowed ~= false and not selected)
+    tab:SetDisabledFontObject(selected and GameFontHighlightSmall or GameFontDisableSmall)
+end
+
 local function selectTab(id)
-    PanelTemplates_SetTab(mainFrame, id)
+    mainFrame.selectedTab = id
+    for _, tab in ipairs(tabs) do
+        styleTab(tab, tab.tabID == id)
+    end
     for tabID, panel in pairs(panels) do
         panel:SetShown(tabID == id)
     end
@@ -413,28 +431,36 @@ end
 
 local function createTab(id, text)
     local tab = CreateFrame("Button", nil, mainFrame, "PanelTabButtonTemplate")
-    tab:SetID(id)
+    tab.tabID = id
     tab:SetText(text)
+    tab:SetWidth((tab:GetFontString() and tab:GetFontString():GetStringWidth() or 60) + 40)
+    local previous = tabs[#tabs]
+    if previous then
+        tab:SetPoint("TOPLEFT", previous, "TOPRIGHT", 3, 0)
+    else
+        tab:SetPoint("TOPLEFT", mainFrame, "BOTTOMLEFT", 12, 2)
+    end
     tab:SetScript("OnClick", function(self)
         PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB)
-        selectTab(self:GetID())
+        selectTab(self.tabID)
     end)
+    table.insert(tabs, tab)
     return tab
 end
 
-local raiderTab = createTab(UI.TAB_RAIDER, "Raider")
-raiderTab:SetPoint("TOPLEFT", mainFrame, "BOTTOMLEFT", 12, 2)
-createTab(UI.TAB_LEAD, "Raidlead")
+createTab(UI.TAB_RAIDER, "Raider")
+local leadTab = createTab(UI.TAB_LEAD, "Raidlead")
 createTab(UI.TAB_OVERVIEW, "Übersicht")
 createTab(UI.TAB_LOOT, "Loot")
-PanelTemplates_SetNumTabs(mainFrame, 4)
 selectTab(UI.TAB_RAIDER)
 
 local function refresh()
     local isLead = ns.Roles:IsLead()
-    PanelTemplates_SetTabEnabled(mainFrame, UI.TAB_LEAD, isLead)
+    leadTab.allowed = isLead
     if not isLead and mainFrame.selectedTab == UI.TAB_LEAD then
         selectTab(UI.TAB_RAIDER)
+    else
+        selectTab(mainFrame.selectedTab or UI.TAB_RAIDER)
     end
 end
 
