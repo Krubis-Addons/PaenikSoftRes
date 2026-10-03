@@ -28,8 +28,11 @@ Es gibt ein Oberfläche beim Looten mit den Soft Reserve Informationen pro Item.
 ## Arbeitsweise (Git, Versionen, Releases)
 - **Nie direkt auf `main` arbeiten.** `main` = getesteter, releasefähiger Stand. Jede Funktion bzw. jeder Fix auf
   einem eigenen Branch von `main`: `feature/<name>`, `fix/<name>`, `chore/<name>` (GitHub Flow).
-- Nach dem Ingame-Test des Nutzers: Branch pushen und per Pull Request in `main` zusammenführen (bis `gh` installiert
-  ist, legt der Nutzer den PR im Browser an), danach Branch löschen. Ungetestetes bleibt auf dem Branch.
+- Nach dem Ingame-Test des Nutzers: Branch pushen. **Pull Requests legt der Nutzer selbst an und führt sie zusammen**
+  – nicht selbst anlegen oder mergen. Danach lokalen Branch löschen und `main` aktualisieren. Ungetestetes bleibt auf
+  dem Branch. GitHub CLI (`gh`, angemeldet als Krubis-Addons) nur zum Lesen nutzen (Action-Läufe, Releases); falls
+  nicht im PATH: `"/c/Program Files/GitHub CLI/gh.exe"`.
+- Vor einem PR `main` in den Branch mergen, damit der PR konfliktfrei ist.
 - Das Spiel lädt über die Junction immer den **ausgecheckten Branch** – vor Tests den richtigen Branch auschecken
   und dem Nutzer sagen, welcher aktiv ist.
 - Versionen nach SemVer, Start 0.9.0 (0.x = Beta). In der `.toc` bleibt `## Version: @project-version@`;
