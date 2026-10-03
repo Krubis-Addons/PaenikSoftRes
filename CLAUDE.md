@@ -9,7 +9,7 @@ Es soll Möglichkeiten geschaffen werden externe Quellen anzubinden um einen Üb
 
 ## Projektdetails
 - Addon-Code: `PaenikSoftRes/` (per Junction im Spiel verlinkt)
-- Zielversionen: WoW: Forever (Interface 16001) und zum Testen MoP Classic (50504, u. a. Solo-Raid mit Plündermeister) – beide in einer `.toc` (`## Interface: 16001, 50504`). Junction auch in `_classic_InterfaceAddOns`; SavedVariables von MoP Classic liegen unter `_classic_WTF…`.
+- Zielversionen: WoW: Forever (Interface 16001) und zum Testen MoP Classic (50504, u. a. Solo-Raid mit Plündermeister) – beide in einer `.toc` (`## Interface: 16001, 50504`). Junction auch in `_classic_\Interface\AddOns`; SavedVariables von MoP Classic liegen unter `_classic_\WTF\Account\FROZENFREAK\SavedVariables`.
 - SavedVariables: `PaenikSoftResDB` (Account: Einstellungen, Wunschliste, Bank-Speicher; `ns.db`), `PaenikSoftResCharDB` (pro Charakter: Sitzungen, Spiegel, Anmeldungen, Gildenkopien; `ns.char`), `PaenikSoftResDebugLog` (Debug-Log)
 - Slash-Befehl: `/paeniksoftres`, Kurzform `/psr`
 
