@@ -5,6 +5,10 @@ Alle nennenswerten Änderungen an PÄNIK SoftRes. Versionen nach [Semantic Versi
 
 ## [Unreleased]
 
+### Neu
+- Forever Beta-Phase 2 (Update 1. Oktober): neuer Dungeon Excavation Site: Wetlands sowie Razorfen Downs, Uldaman,
+  The Stockade, Gnomeregan, Razorfen Kraul und Scarlet Monastery (vier Flügel) mit Forever-Loot.
+
 ## [0.10.0] – 2026-10-03
 
 ### Neu

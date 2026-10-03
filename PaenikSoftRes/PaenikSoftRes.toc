@@ -19,6 +19,7 @@ Data\LootData.lua
 Data\EJProvider.lua
 Data\Instances\MoltenCore.lua
 Data\Instances\ForeverDungeons.lua
+Data\Instances\ForeverDungeonsPhase2.lua
 Data\Instances\MogushanVaults.lua
 Comm.lua
 Rolls.lua
