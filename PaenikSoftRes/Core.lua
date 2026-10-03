@@ -349,6 +349,10 @@ SlashCmdList.PAENIKSOFTRES = function(msg)
         ns.Print("Minimap-Button " .. (hidden and "an" or "aus"))
     elseif msg == "debug" then
         ns.SetDebug(not ns.db.debug)
+    elseif msg == "version" then
+        -- „Entwicklung“ = Stand direkt aus dem Repository (Platzhalter in der .toc), sonst die Release-Version
+        ns.Print("Version " .. ns.VERSION .. (ns.VERSION == "Entwicklung"
+            and " (Stand aus dem Repository, kein Release)" or ""))
     elseif msg == "roll" then
         ns.StartRollFromSlash(rest)
     elseif msg == "loot" then
@@ -369,7 +373,7 @@ SlashCmdList.PAENIKSOFTRES = function(msg)
         end
     else
         ns.Print("Version " .. ns.VERSION .. " – Befehle: show, hide, toggle, options, minimap, loot, beute, roll <Item>, "
-            .. "lootpanel [reset], debug")
+            .. "lootpanel [reset], version, debug")
         if ns.db.debug then
             ns.Print("Testbefehle: probe, fake, loottest, gargultest, vorlagetest [vorbei], lead, raider, auto")
         end
