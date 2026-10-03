@@ -12,7 +12,7 @@ title:SetText(ns.TITLE)
 
 local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
-subtitle:SetText("Soft Reserves, Loot-Anzeige und Würfelrunden. Befehl: /paeniksoftres")
+subtitle:SetText("Version " .. ns.VERSION .. " – Soft Reserves, Loot-Anzeige und Würfelrunden. Befehl: /psr")
 
 local refreshers = {}
 
