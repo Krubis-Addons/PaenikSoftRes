@@ -25,6 +25,19 @@ Es soll eine Schnittstelle geben um andere Soft Reserve System anzubinden:
 
 Es gibt ein Oberfläche beim Looten mit den Soft Reserve Informationen pro Item. Die Raidlead rolle kann eine Roll Runde starten und beenden. Nutzen haben eine Oberfläche zum Rollen der Items (Mainspec, Secondspec, Transmog). 
 
+## Arbeitsweise (Git, Versionen, Releases)
+- **Nie direkt auf `main` arbeiten.** `main` = getesteter, releasefähiger Stand. Jede Funktion bzw. jeder Fix auf
+  einem eigenen Branch von `main`: `feature/<name>`, `fix/<name>`, `chore/<name>` (GitHub Flow).
+- Nach dem Ingame-Test des Nutzers: Branch pushen und per Pull Request in `main` zusammenführen (bis `gh` installiert
+  ist, legt der Nutzer den PR im Browser an), danach Branch löschen. Ungetestetes bleibt auf dem Branch.
+- Das Spiel lädt über die Junction immer den **ausgecheckten Branch** – vor Tests den richtigen Branch auschecken
+  und dem Nutzer sagen, welcher aktiv ist.
+- Versionen nach SemVer, Start 0.9.0 (0.x = Beta). In der `.toc` bleibt `## Version: @project-version@`;
+  `ns.VERSION` (Core.lua) liest sie, lokal „Entwicklung“.
+- Release: `CHANGELOG.md` pflegen (Abschnitt „Unreleased“ → neue Version), Tag `vX.Y.Z` auf `main` pushen →
+  GitHub Action `.github/workflows/release.yml` baut mit dem BigWigs-Packager (`.pkgmeta`) das ZIP als GitHub-Release.
+- Commits weiterhin auf Deutsch mit Co-Authored-By-Zeile.
+
 ## Besonderheiten dieses Addons
 - Roadmap und Status der Iterationen: `ROADMAP.md`
 - Datenmodell (pro Charakter in `ns.char`, Migration aus dem Account-DB in `Session:MigrateToCharacter`): mehrere Sitzungen `char.sessions[id]`, aktive `char.activeSessionId` (wird an die Gruppe verteilt), Spiegel beim Raider `char.remoteSession` (siehe Kopf von `Session.lua`). `Session:Get()` liefert die aktuelle (Raidlead: aktive eigene, Raider in der Gruppe: Spiegel) – immer darüber zugreifen. Spielerschlüssel immer `Name-Realm` über `ns.FullName(unit)`.

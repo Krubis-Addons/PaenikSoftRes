@@ -1,0 +1,22 @@
+# BigWigs-Packager (GitHub Action .github/workflows/release.yml): baut beim Tag vX.Y.Z das Release-ZIP.
+# Das Addon liegt im Unterordner PaenikSoftRes/ und wird im ZIP zum Ordner PaenikSoftRes;
+# @project-version@ in der .toc wird durch den Tag ersetzt.
+package-as: PaenikSoftRes
+
+move-folders:
+  PaenikSoftRes/PaenikSoftRes: PaenikSoftRes
+
+ignore:
+  - .vscode
+  - .github
+  - .claude
+  - CLAUDE.md
+  - ROADMAP.md
+  - CHANGELOG.md
+  - .luacheckrc
+  - .luarc.json
+  - .gitignore
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
