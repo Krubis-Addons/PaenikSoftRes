@@ -5,6 +5,8 @@ Alle nennenswerten Änderungen an PÄNIK SoftRes. Versionen nach [Semantic Versi
 
 ## [Unreleased]
 
+## [0.10.0] – 2026-10-03
+
 ### Neu
 - MoP Classic als Testumgebung (Interface 50504), Testraid Mogu'shan-Gewölbe (Normal/Heroisch).
 - Befehl `/psr version`.
