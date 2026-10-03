@@ -3,6 +3,13 @@ local addonName, ns = ...
 -- Anzeigename im Spiel (Ordner und SavedVariables heißen weiter PaenikSoftRes)
 ns.TITLE = "PÄNIK SoftRes"
 
+-- Version aus der .toc (beim Release vom Packager aus dem Tag gesetzt, lokal noch der Platzhalter)
+do
+    local getMetadata = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
+    local version = getMetadata and getMetadata(addonName, "Version")
+    ns.VERSION = (version and not version:find("@", 1, true)) and version or "Entwicklung"
+end
+
 local DB_VERSION = 2 -- 2: mehrere Sitzungen (db.sessions statt db.session)
 
 local defaults = {
@@ -360,7 +367,8 @@ SlashCmdList.PAENIKSOFTRES = function(msg)
             ns.Print("Testbefehl – erst mit /paeniksoftres debug freischalten.")
         end
     else
-        ns.Print("Befehle: show, hide, toggle, options, minimap, loot, beute, roll <Item>, lootpanel [reset], debug")
+        ns.Print("Version " .. ns.VERSION .. " – Befehle: show, hide, toggle, options, minimap, loot, beute, roll <Item>, "
+            .. "lootpanel [reset], debug")
         if ns.db.debug then
             ns.Print("Testbefehle: probe, fake, loottest, gargultest, vorlagetest [vorbei], lead, raider, auto")
         end
