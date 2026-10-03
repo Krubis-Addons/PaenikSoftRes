@@ -202,12 +202,13 @@ end
 -- Loot ab Qualität für „Soft Reserves“ und „Beute“ (db.lootMinQuality), aufsteigend:
 -- „Selten“ = Selten + Episch + Legendär. Hier, weil Menüs in UI-Dateien sie schon beim Laden brauchen.
 do
-    local Q = Enum.ItemQuality or { Uncommon = 2, Rare = 3, Epic = 4, Legendary = 5 }
+    -- feste Zahlen statt Enum.ItemQuality: dessen Schlüssel heißen je nach Client anders
+    -- (MoP Classic: Good/Superior statt Uncommon/Rare), die Werte sind überall gleich
     ns.LOOT_QUALITIES = {
-        { value = Q.Uncommon, text = "Ungewöhnlich" },
-        { value = Q.Rare, text = "Selten" },
-        { value = Q.Epic, text = "Episch" },
-        { value = Q.Legendary, text = "Legendär" },
+        { value = 2, text = "Ungewöhnlich" },
+        { value = 3, text = "Selten" },
+        { value = 4, text = "Episch" },
+        { value = 5, text = "Legendär" },
     }
 end
 

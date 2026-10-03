@@ -15,11 +15,11 @@ local WIDTH = 380
 local MAX_ROWS = 8
 local TOP = 44       -- Titelleiste + Infozeile
 local TOOLBAR = 40   -- Knopfleiste
-local Q = Enum.ItemQuality or { Uncommon = 2, Rare = 3, Epic = 4, Legendary = 5 }
+local UNCOMMON = 2 -- Qualität „Ungewöhnlich“ (fester Wert, siehe ns.LOOT_QUALITIES in Core.lua)
 
 -- Loot ab Qualität (Einstellung db.lootMinQuality, Liste ns.LOOT_QUALITIES in Core.lua)
 local function minQuality()
-    return ns.db and ns.db.lootMinQuality or Q.Uncommon
+    return ns.db and ns.db.lootMinQuality or UNCOMMON
 end
 
 -- Anzeige: Items unter der Qualität ausblenden; selbst hineingezogene Taschen-Items immer zeigen,

@@ -1,4 +1,4 @@
-## Interface: 16001
+## Interface: 16001, 50504
 ## Title: PÄNIK SoftRes
 ## Notes: Soft-Reserve-Verwaltung für Raids: Regeln, Reserves, Loot-Anzeige und Roll-Runden.
 ## Author: Krubis Addons
@@ -19,6 +19,7 @@ Data\LootData.lua
 Data\EJProvider.lua
 Data\Instances\MoltenCore.lua
 Data\Instances\ForeverDungeons.lua
+Data\Instances\MogushanVaults.lua
 Comm.lua
 Rolls.lua
 GargulCompat.lua

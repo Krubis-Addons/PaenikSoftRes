@@ -201,9 +201,31 @@ function StaticProvider:GetInstances()
     return list
 end
 
+-- Bosse mit ejEncounterID (z. B. MoP-Tabellen ohne DisplayIDs): Porträt und lokalisierten Namen einmalig aus
+-- dem Dungeonkompendium holen, falls der Client es hat (MoP Classic ja, Forever-Beta nein → Totenkopf)
+local function resolveFromJournal(encounter)
+    if encounter.ejTried or not encounter.ejEncounterID then return end
+    encounter.ejTried = true
+    if type(EJ_GetCreatureInfo) == "function" and not encounter.displayID then
+        local ok, _, _, _, displayInfo = pcall(EJ_GetCreatureInfo, 1, encounter.ejEncounterID)
+        if ok and type(displayInfo) == "number" and displayInfo > 0 then
+            encounter.displayID = displayInfo
+        end
+    end
+    if type(EJ_GetEncounterInfo) == "function" then
+        local ok, name = pcall(EJ_GetEncounterInfo, encounter.ejEncounterID)
+        if ok and type(name) == "string" and name ~= "" then
+            encounter.name = name
+        end
+    end
+end
+
 function StaticProvider:GetEncounters(key)
     for _, instance in ipairs(staticInstances) do
         if instance.key == key then
+            for _, encounter in ipairs(instance.encounters) do
+                resolveFromJournal(encounter)
+            end
             return instance.encounters
         end
     end
