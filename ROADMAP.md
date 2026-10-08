@@ -24,6 +24,21 @@ Offen / später:
 - Gemeinsame Raidleiter (zwei Personen in der Gilde): Rang-Einstellung des Gildenmeisters kommt an, Gildensitzung übernehmen, Änderungen gegenseitig übernehmen, Anmeldungen an den zuletzt Ändernden, Mitglied unterhalb des Rangs sieht nichts.
 
 Ideen (später umsetzen):
+- **Loot-Timer (Handelszeit):** Zu jedem gelooteten, seelengebundenen Item anzeigen, wie lange es noch handelbar ist
+  (Bind on Pickup: 2 h an Raidmitglieder, die beim Kill dabei waren). In der Beute als Restzeit („noch 1:23 h“),
+  farbig, wenn es knapp wird, ggf. Hinweis kurz vor Ablauf. Quelle: Tooltip-Zeile der Handelszeit
+  (`BIND_TRADE_TIME_REMAINING` über `C_TooltipInfo.GetBagItem`) – vorher recherchieren.
+- **Ton bei Würfelrunden:** Wie bei Gargul einen Ton abspielen, wenn eine Würfelrunde startet – besonders auffällig, wenn
+  ein eigenes SR-Item (oder Wunschlisten-Item) verrollt wird. Einstellbar (an/aus, nur bei eigenem SR).
+- **Handels-Ankündigung:** Wird ein gewonnenes Item an den Gewinner übergeben (Handel abgeschlossen oder als
+  Plündermeister zugeteilt), eine Ansage im Raid-/Gruppenchat, z. B. „[Item] an X übergeben“. Einstellbar.
+- **Verlauf mit Platzierungen:** Im Verlauf neben dem Gewinner auch Platz 2 und 3 (mit Kategorie und Wurf) speichern
+  und anzeigen. Damit lässt sich ein Item weitergeben, wenn der Gewinner es nicht nimmt oder nicht mehr erreichbar ist –
+  z. B. Rechtsklick „An Platz 2 vergeben“ (Ansage, Verlauf, Übergabe wie beim Gewinner).
+- **Ausrüstung der Würfelnden anzeigen:** Im Leitfenster (und bei der Gewinnerwahl) zu jedem Würfelnden zeigen, was er im
+  passenden Slot gerade trägt – erkennbar, wenn jemand das Item (oder ein besseres) schon hat. Weg mit Addon: der Raider
+  schickt beim Würfeln seine Items des Slots mit (z. B. Feld in `RD` bzw. eigene Nachricht); ohne Addon nur per
+  Betrachten (`NotifyInspect`, Reichweite nötig). Tooltip beim Überfahren mit dem getragenen Item.
 - **Beute: nicht eingesammelte Items kennzeichnen:** Im „Beute“-Fenster sichtbar machen, welche Items noch in der Leiche liegen (weder gelootet noch zugeteilt) – damit nichts vergessen wird, bevor die Leiche verschwindet. Umsetzung: beim Schließen des Lootfensters (`LOOT_CLOSED`) prüfen, welche Einträge der Leiche noch als Slot vorhanden sind → Status „nicht eingesammelt“ (auffällige Farbe, evtl. Zähler in der Infozeile); verschwindet der Slot (`LOOT_SLOT_CLEARED`) → Markierung entfällt (eingesammelt ist der Normalfall, kein eigener Status); wurde per Plündermeister zugeteilt → „zugeteilt an X“. Es gibt also nur die Zustände „nicht eingesammelt“ und „zugeteilt“. Status geht mit der Nachricht `L` an die Gruppe.
 - **Gewinner automatisch zuteilen (optional):** Einstellung, dass das Item als Plündermeister direkt dem Gewinner zugeteilt wird, sobald er feststeht – automatisch (höchster Wurf) oder manuell gewählt –, statt erst „Zuteilen“ zu klicken. Nur wenn die Leiche mit dem Item noch offen ist und der Gewinner Plündermeister-Kandidat ist; sonst bleibt „Zuteilen“ bzw. die Übergabe per Handel. Bei Gleichstand nichts zuteilen. Ggf. Sicherheitsabfrage abschaltbar machen, weil ein Fehlklick das Item sofort vergibt.
 - **Würfelrunden überarbeiten (klären):** Sind zwei Würfelrunden sinnvoll? Heute folgt automatisch direkt eine zweite Runde, wenn die SR-Runde leer bleibt (Zeitfenster ohne Würfe der Berechtigten oder alle passen → freier Wurf, `switchToFreeForAll` in Rolls.lua) bzw. als Nachwurf bei Gleichstand. Automatisch direkt hintereinander ist nicht gut – verbesserungswürdig. Mögliche Richtungen (vor der Umsetzung besprechen): Raidlead entscheidet per Knopf „Freier Wurf starten“ statt Automatik; eine einzige Runde, in der SR-Inhaber Vorrang haben und alle anderen gleichzeitig würfeln; Pause bzw. Ansage zwischen den Runden. Dazu: Ansagen (Rundenstart, Gewinner, Wechsel zum freien Wurf) wahlweise als Schlachtzugswarnung statt im Gruppen-/Raidchat – einstellbar (Raidwarnung nur mit Leiter-/Assistentenrechten möglich, sonst Chat als Rückfall). Bei festgelegter Würfelzeit ein Countdown (z. B. „noch 5 … 4 … 3 …“ im Chat bzw. als Raidwarnung, Zeitpunkt einstellbar; ähnlich Gargul).
